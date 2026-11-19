@@ -30,8 +30,10 @@ export default function CampiPage() {
   useEffect(() => {
     async function caricaCampi() {
       const supabase = getSupabase();
-      const { data: { user } } =
-        await supabase.auth.getUser();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (!user) {
         window.location.href = "/";
@@ -81,67 +83,7 @@ export default function CampiPage() {
     setMessaggio("");
   }
 
-  
-async function salvaModifiche() {
-  if (!campoSelezionato || !resortId) return;
-
-  if (!nome.trim() || !superficie.trim()) {
-    setErrore("Inserisci il nome e la superficie.");
-    return;
-  }
-
-  setSalvando(true);
-  setErrore("");
-  setMessaggio("");
-
-  try {
-    const supabase = getSupabase();
-
-    const { data, error } = await supabase
-      .from("sport_courts")
-      .update({
-        name: nome.trim(),
-        surface: superficie.trim(),
-        status: stato
-      })
-      .eq("id", campoSelezionato.id)
-      .eq("resort_id", resortId)
-      .select("id, name, sport, surface, status")
-      .maybeSingle();
-
-    if (error) {
-      setErrore("Errore durante il salvataggio: " + error.message);
-      return;
-    }
-
-    if (!data) {
-      setErrore(
-        "Nessun campo aggiornato. Verificare i permessi e l'associazione al resort."
-      );
-      return;
-    }
-
-    setCampi((precedenti) =>
-      precedenti.map((campo) =>
-        campo.id === data.id ? data : campo
-      )
-    );
-
-    setCampoSelezionato(data);
-    setNome(data.name);
-    setSuperficie(data.surface);
-    setStato(data.status);
-    setMessaggio("Modifiche salvate correttamente!");
-
-  } catch (err) {
-    setErrore(
-      "Errore imprevisto durante il salvataggio."
-    );
-  } finally {
-    setSalvando(false);
-  }
-}
- {
+  async function salvaModifiche() {
     if (!campoSelezionato || !resortId) return;
 
     if (!nome.trim() || !superficie.trim()) {
@@ -153,23 +95,35 @@ async function salvaModifiche() {
     setErrore("");
     setMessaggio("");
 
-    const supabase = getSupabase();
+    try {
+      const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("sport_courts")
-      .update({
-        name: nome.trim(),
-        surface: superficie.trim(),
-        status: stato
-      })
-      .eq("id", campoSelezionato.id)
-      .eq("resort_id", resortId)
-      .select("id, name, sport, surface, status")
-      .single();
+      const { data, error } = await supabase
+        .from("sport_courts")
+        .update({
+          name: nome.trim(),
+          surface: superficie.trim(),
+          status: stato,
+        })
+        .eq("id", campoSelezionato.id)
+        .eq("resort_id", resortId)
+        .select("id, name, sport, surface, status")
+        .maybeSingle();
 
-    if (error) {
-      setErrore("Errore durante il salvataggio: " + error.message);
-    } else {
+      if (error) {
+        setErrore(
+          "Errore durante il salvataggio: " + error.message
+        );
+        return;
+      }
+
+      if (!data) {
+        setErrore(
+          "Nessun campo aggiornato. Verificare i permessi e l'associazione al resort."
+        );
+        return;
+      }
+
       setCampi((precedenti) =>
         precedenti.map((campo) =>
           campo.id === data.id ? data : campo
@@ -181,9 +135,11 @@ async function salvaModifiche() {
       setSuperficie(data.surface);
       setStato(data.status);
       setMessaggio("Modifiche salvate correttamente!");
+    } catch {
+      setErrore("Errore imprevisto durante il salvataggio.");
+    } finally {
+      setSalvando(false);
     }
-
-    setSalvando(false);
   }
 
   const campiFiltrati = campi.filter(
@@ -193,40 +149,46 @@ async function salvaModifiche() {
   );
 
   return (
-    <main style={{
-      padding: 24,
-      background: "#fcf9f6",
-      minHeight: "100vh",
-      color: "#333"
-    }}>
+    <main
+      style={{
+        padding: 24,
+        background: "#fcf9f6",
+        minHeight: "100vh",
+        color: "#333",
+      }}
+    >
       <h1 style={{ color: "#a52b2b" }}>
         Gestione campi
       </h1>
 
       <p>Happy Tennis Resort Manager</p>
 
-      <div style={{
-        display: "flex",
-        gap: 12,
-        flexWrap: "wrap",
-        margin: "24px 0"
-      }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          margin: "24px 0",
+        }}
+      >
         <strong>6 Tennis</strong>
         <strong>6 Padel</strong>
         <strong>6 Pickleball</strong>
       </div>
 
-      <div style={{
-        display: "flex",
-        gap: 10,
-        flexWrap: "wrap",
-        margin: "20px 0"
-      }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          margin: "20px 0",
+        }}
+      >
         {[
           { label: "Tutti", value: "tutti" },
           { label: "Tennis", value: "tennis" },
           { label: "Padel", value: "padel" },
-          { label: "Pickleball", value: "pickleball" }
+          { label: "Pickleball", value: "pickleball" },
         ].map((sport) => (
           <button
             key={sport.value}
@@ -236,9 +198,13 @@ async function salvaModifiche() {
               borderRadius: 10,
               border: "1px solid #a52b2b",
               background:
-                filtroSport === sport.value ? "#a52b2b" : "white",
+                filtroSport === sport.value
+                  ? "#a52b2b"
+                  : "white",
               color:
-                filtroSport === sport.value ? "white" : "#a52b2b"
+                filtroSport === sport.value
+                  ? "white"
+                  : "#a52b2b",
             }}
           >
             {sport.label}
@@ -247,34 +213,38 @@ async function salvaModifiche() {
       </div>
 
       {loading && <p>Caricamento campi...</p>}
+
       {errore && !campoSelezionato && (
         <p style={{ color: "red" }}>{errore}</p>
       )}
 
-      {!loading && campiFiltrati.map((campo) => (
-        <article
-          key={campo.id}
-          onClick={() => apriScheda(campo)}
-          style={{
-            background: "white",
-            border: "1px solid #e8dccb",
-            borderRadius: 14,
-            padding: 18,
-            marginBottom: 12,
-            cursor: "pointer"
-          }}
-        >
-          <h2 style={{ color: "#a52b2b" }}>
-            {campo.name}
-          </h2>
-          <p>Sport: {campo.sport}</p>
-          <p>Superficie: {campo.surface}</p>
-          <p>Stato: {campo.status}</p>
-          <strong style={{ color: "#a52b2b" }}>
-            Apri scheda →
-          </strong>
-        </article>
-      ))}
+      {!loading &&
+        campiFiltrati.map((campo) => (
+          <article
+            key={campo.id}
+            onClick={() => apriScheda(campo)}
+            style={{
+              background: "white",
+              border: "1px solid #e8dccb",
+              borderRadius: 14,
+              padding: 18,
+              marginBottom: 12,
+              cursor: "pointer",
+            }}
+          >
+            <h2 style={{ color: "#a52b2b" }}>
+              {campo.name}
+            </h2>
+
+            <p>Sport: {campo.sport}</p>
+            <p>Superficie: {campo.surface}</p>
+            <p>Stato: {campo.status}</p>
+
+            <strong style={{ color: "#a52b2b" }}>
+              Apri scheda →
+            </strong>
+          </article>
+        ))}
 
       {campoSelezionato && (
         <div
@@ -287,7 +257,7 @@ async function salvaModifiche() {
             alignItems: "center",
             justifyContent: "center",
             padding: 18,
-            zIndex: 1000
+            zIndex: 1000,
           }}
         >
           <section
@@ -300,7 +270,7 @@ async function salvaModifiche() {
               maxWidth: 500,
               maxHeight: "90vh",
               overflowY: "auto",
-              color: "#333"
+              color: "#333",
             }}
           >
             <h2 style={{ color: "#a52b2b" }}>
@@ -319,7 +289,7 @@ async function salvaModifiche() {
                 margin: "8px 0 18px",
                 border: "1px solid #d8c9ba",
                 borderRadius: 8,
-                fontSize: 16
+                fontSize: 16,
               }}
             />
 
@@ -335,7 +305,7 @@ async function salvaModifiche() {
                 margin: "8px 0 18px",
                 border: "1px solid #d8c9ba",
                 borderRadius: 8,
-                fontSize: 16
+                fontSize: 16,
               }}
             />
 
@@ -352,12 +322,16 @@ async function salvaModifiche() {
                 border: "1px solid #d8c9ba",
                 borderRadius: 8,
                 fontSize: 16,
-                background: "white"
+                background: "white",
               }}
             >
               <option value="active">Attivo</option>
-              <option value="maintenance">In manutenzione</option>
-              <option value="inactive">Non disponibile</option>
+              <option value="maintenance">
+                In manutenzione
+              </option>
+              <option value="inactive">
+                Non disponibile
+              </option>
             </select>
 
             {errore && (
@@ -379,10 +353,12 @@ async function salvaModifiche() {
                 borderRadius: 10,
                 background: "#a52b2b",
                 color: "white",
-                fontSize: 16
+                fontSize: 16,
               }}
             >
-              {salvando ? "Salvataggio..." : "Salva modifiche"}
+              {salvando
+                ? "Salvataggio..."
+                : "Salva modifiche"}
             </button>
 
             <button
@@ -395,7 +371,7 @@ async function salvaModifiche() {
                 borderRadius: 10,
                 background: "white",
                 color: "#a52b2b",
-                fontSize: 16
+                fontSize: 16,
               }}
             >
               Chiudi scheda
