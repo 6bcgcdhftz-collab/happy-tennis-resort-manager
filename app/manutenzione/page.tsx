@@ -25,7 +25,6 @@ export default function ManutenzionePage() {
   const [campi, setCampi] = useState<Campo[]>([]);
   const [interventi, setInterventi] = useState<Intervento[]>([]);
   const [resortId, setResortId] = useState("");
-  const [userId, setUserId] = useState("");
   const [isMaestro, setIsMaestro] = useState(false);
 
   const [campoId, setCampoId] = useState("");
@@ -36,31 +35,34 @@ export default function ManutenzionePage() {
 
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [completandoId, setCompletandoId] = useState("");
   const [errore, setErrore] = useState("");
   const [messaggio, setMessaggio] = useState("");
 
   async function caricaDati() {
     const supabase = getSupabase();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (userError || !user) {
       window.location.href = "/";
       return;
     }
-
-    setUserId(user.id);
 
     const { data: membership, error: membershipError } =
       await supabase
         .from("resort_memberships")
         .select("resort_id, role")
         .eq("user_id", user.id)
+        .eq("status", "active")
         .limit(1)
         .maybeSingle();
 
     if (membershipError || !membership) {
-      setErrore("Nessun resort associato all'utente.");
+      setErrore("Nessun resort attivo associato all'utente.");
       setLoading(false);
       return;
     }
@@ -111,7 +113,7 @@ export default function ManutenzionePage() {
       return;
     }
 
-    if (!isMaestro) {
+    if (!isMaestro || !resortId) {
       setErrore(
         "Solo il Maestro responsabile può registrare interventi."
       );
@@ -124,20 +126,17 @@ export default function ManutenzionePage() {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("court_maintenance")
-      .insert({
-        resort_id: resortId,
-        court_id: campoId,
-        title: titolo.trim(),
-        description: descrizione.trim() || null,
-        maintenance_type: tipo,
-        priority: priorita,
-        status: "open",
-        created_by: userId,
-      })
-      .select()
-      .single();
+    const { error } = await supabase.rpc(
+      "apri_intervento_manutenzione",
+      {
+        p_resort_id: resortId,
+        p_court_id: campoId,
+        p_title: titolo.trim(),
+        p_description: descrizione.trim() || null,
+        p_maintenance_type: tipo,
+        p_priority: priorita,
+      }
+    );
 
     if (error) {
       setErrore("Errore nella segnalazione: " + error.message);
@@ -145,30 +144,9 @@ export default function ManutenzionePage() {
       return;
     }
 
-    const { error: courtError } = await supabase
-      .from("sport_courts")
-      .update({ status: "maintenance" })
-      .eq("id", campoId)
-      .eq("resort_id", resortId);
-
-    await supabase.from("court_maintenance_history").insert({
-      resort_id: resortId,
-      maintenance_id: data.id,
-      action: "created",
-      notes: "Segnalazione aperta",
-      performed_by: userId,
-    });
-
-    if (courtError) {
-      setErrore(
-        "Segnalazione creata, ma non è stato possibile aggiornare lo stato del campo: " +
-          courtError.message
-      );
-    } else {
-      setMessaggio(
-        "Segnalazione registrata. Il campo è stato messo in manutenzione."
-      );
-    }
+    setMessaggio(
+      "Segnalazione registrata. Il campo è stato messo in manutenzione."
+    );
 
     setTitolo("");
     setDescrizione("");
@@ -181,7 +159,7 @@ export default function ManutenzionePage() {
   }
 
   async function completaIntervento(intervento: Intervento) {
-    if (!isMaestro) {
+    if (!isMaestro || !resortId) {
       setErrore(
         "Solo il Maestro responsabile può confermare il completamento."
       );
@@ -194,77 +172,32 @@ export default function ManutenzionePage() {
 
     if (!conferma) return;
 
-    const supabase = getSupabase();
-
+    setCompletandoId(intervento.id);
     setErrore("");
     setMessaggio("");
 
-    const { error } = await supabase
-      .from("court_maintenance")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", intervento.id)
-      .eq("resort_id", resortId);
+    const supabase = getSupabase();
+
+    const { error } = await supabase.rpc(
+      "completa_intervento_manutenzione",
+      {
+        p_resort_id: resortId,
+        p_maintenance_id: intervento.id,
+      }
+    );
 
     if (error) {
-      setErrore("Errore: " + error.message);
+      setErrore("Errore nel completamento: " + error.message);
+      setCompletandoId("");
       return;
     }
 
-    const { error: historyError } = await supabase
-      .from("court_maintenance_history")
-      .insert({
-        resort_id: resortId,
-        maintenance_id: intervento.id,
-        action: "completed",
-        notes: "Completamento confermato dal Maestro responsabile",
-        performed_by: userId,
-      });
-
-    if (historyError) {
-      setErrore(
-        "Intervento completato, ma lo storico non è stato aggiornato: " +
-          historyError.message
-      );
-    }
-
-    const { data: altriInterventi, error: checkError } =
-      await supabase
-        .from("court_maintenance")
-        .select("id")
-        .eq("resort_id", resortId)
-        .eq("court_id", intervento.court_id)
-        .in("status", ["open", "in_progress"]);
-
-    if (checkError) {
-      setErrore(
-        "Intervento completato. Verifica manualmente lo stato del campo: " +
-          checkError.message
-      );
-    } else if (!altriInterventi || altriInterventi.length === 0) {
-      const { error: updateError } = await supabase
-        .from("sport_courts")
-        .update({ status: "active" })
-        .eq("id", intervento.court_id)
-        .eq("resort_id", resortId);
-
-      if (updateError) {
-        setErrore(
-          "Intervento completato, ma il campo non è stato riattivato: " +
-            updateError.message
-        );
-      } else {
-        setMessaggio("Intervento completato e campo riattivato.");
-      }
-    } else {
-      setMessaggio(
-        "Intervento completato. Il campo resta in manutenzione perché ha altri interventi aperti."
-      );
-    }
+    setMessaggio(
+      "Intervento completato. Lo stato del campo è stato verificato."
+    );
 
     await caricaDati();
+    setCompletandoId("");
   }
 
   function nomeCampo(id: string) {
@@ -317,7 +250,7 @@ export default function ManutenzionePage() {
         Manutenzione
       </h1>
 
-      <p>Happy Tennis Resort Manager · Stagione operativa</p>
+      <p>Happy Tennis Resort Manager · Stagione 2027</p>
 
       {errore && (
         <p style={{ color: "#b42318", marginTop: 16 }}>
@@ -355,7 +288,7 @@ export default function ManutenzionePage() {
         <select
           value={campoId}
           onChange={(e) => setCampoId(e.target.value)}
-          disabled={!isMaestro}
+          disabled={!isMaestro || loading || salvando}
           style={stileInput}
         >
           <option value="">Seleziona un campo</option>
@@ -371,7 +304,7 @@ export default function ManutenzionePage() {
           value={titolo}
           onChange={(e) => setTitolo(e.target.value)}
           placeholder="Es. Rete danneggiata"
-          disabled={!isMaestro}
+          disabled={!isMaestro || loading || salvando}
           style={stileInput}
         />
 
@@ -380,7 +313,7 @@ export default function ManutenzionePage() {
           value={descrizione}
           onChange={(e) => setDescrizione(e.target.value)}
           placeholder="Descrivi il problema riscontrato..."
-          disabled={!isMaestro}
+          disabled={!isMaestro || loading || salvando}
           rows={4}
           style={stileInput}
         />
@@ -389,7 +322,7 @@ export default function ManutenzionePage() {
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value)}
-          disabled={!isMaestro}
+          disabled={!isMaestro || loading || salvando}
           style={stileInput}
         >
           <option value="damage">Guasto</option>
@@ -403,7 +336,7 @@ export default function ManutenzionePage() {
         <select
           value={priorita}
           onChange={(e) => setPriorita(e.target.value)}
-          disabled={!isMaestro}
+          disabled={!isMaestro || loading || salvando}
           style={stileInput}
         >
           <option value="low">Bassa</option>
@@ -491,6 +424,7 @@ export default function ManutenzionePage() {
                 intervento.status === "in_progress") && (
                 <button
                   onClick={() => completaIntervento(intervento)}
+                  disabled={completandoId === intervento.id}
                   style={{
                     display: "block",
                     width: "100%",
@@ -500,9 +434,13 @@ export default function ManutenzionePage() {
                     borderRadius: 9,
                     background: "#287a45",
                     color: "white",
+                    opacity:
+                      completandoId === intervento.id ? 0.6 : 1,
                   }}
                 >
-                  Conferma completamento
+                  {completandoId === intervento.id
+                    ? "Completamento..."
+                    : "Conferma completamento"}
                 </button>
               )}
           </article>
