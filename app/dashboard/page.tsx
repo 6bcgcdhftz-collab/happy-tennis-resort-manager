@@ -28,6 +28,20 @@ export default function Dashboard() {
   return <main className="dashboard">
     <header className="dash-head"><div className="brand compact"><span className="ball">●</span><div><strong>Happy Tennis</strong><em>Resort Manager</em></div></div><button onClick={logout}>Esci</button></header>
     <section className="welcome"><span className="eyebrow">AMBIENTE OPERATIVO</span><h1>{resort}</h1><p>Accesso effettuato come {email}</p><div className="notice">Primo modulo attivo: autenticazione e creazione dell'ambiente resort. Le altre sezioni saranno abilitate progressivamente durante lo sviluppo.</div></section>
-    <section className="module-grid">{["Manutenzione campi","Inventario","Manutenzione materiale","Lezioni e maestri","Prenotazioni e affitti","Tornei","Eventi","Contabilità","Gestione turisti","Documenti contrattuali"].map((x,i)=><article key={x}><small>{String(i+1).padStart(2,"0")}</small><h3>{x}</h3><span>Modulo in preparazione</span></article>)}</section>
+    <section className="module-grid">
+  {["Manutenzione campi","Inventario","Manutenzione materiale","Lezioni e maestri","Prenotazioni e affitti","Tornei","Eventi","Contabilità","Gestione turisti","Documenti contrattuali"].map((x,i)=>(
+    <article
+      key={x}
+      onClick={() => {
+        if (i === 0) window.location.href = "/campi";
+      }}
+      style={{ cursor: i === 0 ? "pointer" : "default" }}
+    >
+      <small>{String(i+1).padStart(2,"0")}</small>
+      <h3>{x}</h3>
+      <span>{i === 0 ? "Apri gestione campi →" : "Modulo in preparazione"}</span>
+    </article>
+  ))}
+</section>
   </main>;
 }
