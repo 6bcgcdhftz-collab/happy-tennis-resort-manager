@@ -16,14 +16,20 @@ export default function CampiPage() {
   const [campi, setCampi] = useState<Campo[]>([]);
   const [loading, setLoading] = useState(true);
   const [errore, setErrore] = useState("");
+  const [messaggio, setMessaggio] = useState("");
   const [filtroSport, setFiltroSport] = useState("tutti");
   const [campoSelezionato, setCampoSelezionato] =
     useState<Campo | null>(null);
 
+  const [resortId, setResortId] = useState("");
+  const [nome, setNome] = useState("");
+  const [superficie, setSuperficie] = useState("");
+  const [stato, setStato] = useState("active");
+  const [salvando, setSalvando] = useState(false);
+
   useEffect(() => {
     async function caricaCampi() {
       const supabase = getSupabase();
-
       const { data: { user } } =
         await supabase.auth.getUser();
 
@@ -46,6 +52,8 @@ export default function CampiPage() {
         return;
       }
 
+      setResortId(membership.resort_id);
+
       const { data, error } = await supabase
         .from("sport_courts")
         .select("id, name, sport, surface, status")
@@ -63,6 +71,60 @@ export default function CampiPage() {
 
     caricaCampi();
   }, []);
+
+  function apriScheda(campo: Campo) {
+    setCampoSelezionato(campo);
+    setNome(campo.name);
+    setSuperficie(campo.surface);
+    setStato(campo.status);
+    setErrore("");
+    setMessaggio("");
+  }
+
+  async function salvaModifiche() {
+    if (!campoSelezionato || !resortId) return;
+
+    if (!nome.trim() || !superficie.trim()) {
+      setErrore("Inserisci il nome e la superficie.");
+      return;
+    }
+
+    setSalvando(true);
+    setErrore("");
+    setMessaggio("");
+
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from("sport_courts")
+      .update({
+        name: nome.trim(),
+        surface: superficie.trim(),
+        status: stato
+      })
+      .eq("id", campoSelezionato.id)
+      .eq("resort_id", resortId)
+      .select("id, name, sport, surface, status")
+      .single();
+
+    if (error) {
+      setErrore("Errore durante il salvataggio: " + error.message);
+    } else {
+      setCampi((precedenti) =>
+        precedenti.map((campo) =>
+          campo.id === data.id ? data : campo
+        )
+      );
+
+      setCampoSelezionato(data);
+      setNome(data.name);
+      setSuperficie(data.surface);
+      setStato(data.status);
+      setMessaggio("Modifiche salvate correttamente!");
+    }
+
+    setSalvando(false);
+  }
 
   const campiFiltrati = campi.filter(
     (campo) =>
@@ -114,13 +176,9 @@ export default function CampiPage() {
               borderRadius: 10,
               border: "1px solid #a52b2b",
               background:
-                filtroSport === sport.value
-                  ? "#a52b2b"
-                  : "white",
+                filtroSport === sport.value ? "#a52b2b" : "white",
               color:
-                filtroSport === sport.value
-                  ? "white"
-                  : "#a52b2b"
+                filtroSport === sport.value ? "white" : "#a52b2b"
             }}
           >
             {sport.label}
@@ -129,12 +187,14 @@ export default function CampiPage() {
       </div>
 
       {loading && <p>Caricamento campi...</p>}
-      {errore && <p style={{ color: "red" }}>{errore}</p>}
+      {errore && !campoSelezionato && (
+        <p style={{ color: "red" }}>{errore}</p>
+      )}
 
       {!loading && campiFiltrati.map((campo) => (
         <article
           key={campo.id}
-          onClick={() => setCampoSelezionato(campo)}
+          onClick={() => apriScheda(campo)}
           style={{
             background: "white",
             border: "1px solid #e8dccb",
@@ -173,11 +233,13 @@ export default function CampiPage() {
           <section
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#fff",
+              background: "white",
               borderRadius: 18,
               padding: 24,
               width: "100%",
               maxWidth: 500,
+              maxHeight: "90vh",
+              overflowY: "auto",
               color: "#333"
             }}
           >
@@ -185,36 +247,94 @@ export default function CampiPage() {
               Scheda {campoSelezionato.name}
             </h2>
 
-            <p>
-              <strong>Sport:</strong>{" "}
-              {campoSelezionato.sport}
-            </p>
+            <label>Nome del campo</label>
+            <input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              style={{
+                display: "block",
+                width: "100%",
+                boxSizing: "border-box",
+                padding: 12,
+                margin: "8px 0 18px",
+                border: "1px solid #d8c9ba",
+                borderRadius: 8,
+                fontSize: 16
+              }}
+            />
 
-            <p>
-              <strong>Superficie:</strong>{" "}
-              {campoSelezionato.surface}
-            </p>
+            <label>Superficie</label>
+            <input
+              value={superficie}
+              onChange={(e) => setSuperficie(e.target.value)}
+              style={{
+                display: "block",
+                width: "100%",
+                boxSizing: "border-box",
+                padding: 12,
+                margin: "8px 0 18px",
+                border: "1px solid #d8c9ba",
+                borderRadius: 8,
+                fontSize: 16
+              }}
+            />
 
-            <p>
-              <strong>Stato:</strong>{" "}
-              {campoSelezionato.status}
-            </p>
+            <label>Stato del campo</label>
+            <select
+              value={stato}
+              onChange={(e) => setStato(e.target.value)}
+              style={{
+                display: "block",
+                width: "100%",
+                boxSizing: "border-box",
+                padding: 12,
+                margin: "8px 0 18px",
+                border: "1px solid #d8c9ba",
+                borderRadius: 8,
+                fontSize: 16,
+                background: "white"
+              }}
+            >
+              <option value="active">Attivo</option>
+              <option value="maintenance">In manutenzione</option>
+              <option value="inactive">Non disponibile</option>
+            </select>
 
-            <p style={{ color: "#777" }}>
-              Qui aggiungeremo la modifica dei dati
-              e lo storico della manutenzione.
-            </p>
+            {errore && (
+              <p style={{ color: "red" }}>{errore}</p>
+            )}
+
+            {messaggio && (
+              <p style={{ color: "green" }}>{messaggio}</p>
+            )}
+
+            <button
+              onClick={salvaModifiche}
+              disabled={salvando}
+              style={{
+                width: "100%",
+                padding: 15,
+                marginTop: 12,
+                border: "none",
+                borderRadius: 10,
+                background: "#a52b2b",
+                color: "white",
+                fontSize: 16
+              }}
+            >
+              {salvando ? "Salvataggio..." : "Salva modifiche"}
+            </button>
 
             <button
               onClick={() => setCampoSelezionato(null)}
               style={{
                 width: "100%",
                 padding: 14,
-                marginTop: 16,
-                border: "none",
+                marginTop: 10,
+                border: "1px solid #a52b2b",
                 borderRadius: 10,
-                background: "#a52b2b",
-                color: "white",
+                background: "white",
+                color: "#a52b2b",
                 fontSize: 16
               }}
             >
