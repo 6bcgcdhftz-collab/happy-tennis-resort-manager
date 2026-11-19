@@ -57,7 +57,7 @@ export default function ManutenzionePage() {
         .from("resort_memberships")
         .select("resort_id, role")
         .eq("user_id", user.id)
-        .eq("status", "active")
+        
         .limit(1)
         .maybeSingle();
 
