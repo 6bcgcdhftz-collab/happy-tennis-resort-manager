@@ -84,7 +84,28 @@ export default function CampiPage() {
       </div>
 
       {loading && <p>Caricamento campi...</p>}
-
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "20px 0" }}>
+  {[
+    { label: "Tutti", value: "tutti" },
+    { label: "Tennis", value: "tennis" },
+    { label: "Padel", value: "padel" },
+    { label: "Pickleball", value: "pickleball" }
+  ].map((sport) => (
+    <button
+      key={sport.value}
+      onClick={() => setFiltroSport(sport.value)}
+      style={{
+        padding: "12px 18px",
+        borderRadius: 10,
+        border: "1px solid #a52b2b",
+        background: filtroSport === sport.value ? "#a52b2b" : "white",
+        color: filtroSport === sport.value ? "white" : "#a52b2b"
+      }}
+    >
+      {sport.label}
+    </button>
+  ))}
+</div>
       {errore && <p style={{ color: "red" }}>{errore}</p>}
 
       {!loading && campi.map((campo) => (
