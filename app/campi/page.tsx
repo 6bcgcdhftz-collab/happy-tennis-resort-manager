@@ -108,7 +108,9 @@ export default function CampiPage() {
 </div>
       {errore && <p style={{ color: "red" }}>{errore}</p>}
 
-      {!loading && campi.map((campo) => (
+      {!loading && campi
+  .filter((campo) => filtroSport === "tutti" || campo.sport.toLowerCase() === filtroSport)
+  .map((campo) => (
         <article key={campo.id} style={{
           background: "white",
           border: "1px solid #e8dccb",
