@@ -21,9 +21,20 @@ type Intervento = {
   created_at: string;
 };
 
+type Allegato = {
+  id: string;
+  maintenance_id: string;
+  file_name: string;
+  file_path: string;
+  content_type: string | null;
+  file_size: number | null;
+  created_at: string;
+};
+
 export default function ManutenzionePage() {
   const [campi, setCampi] = useState<Campo[]>([]);
   const [interventi, setInterventi] = useState<Intervento[]>([]);
+  const [allegati, setAllegati] = useState<Allegato[]>([]);
   const [resortId, setResortId] = useState("");
   const [isMaestro, setIsMaestro] = useState(false);
 
@@ -36,6 +47,7 @@ export default function ManutenzionePage() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [completandoId, setCompletandoId] = useState("");
+  const [caricandoAllegatiId, setCaricandoAllegatiId] = useState("");
   const [errore, setErrore] = useState("");
   const [messaggio, setMessaggio] = useState("");
 
@@ -57,7 +69,6 @@ export default function ManutenzionePage() {
         .from("resort_memberships")
         .select("resort_id, role")
         .eq("user_id", user.id)
-        
         .limit(1)
         .maybeSingle();
 
@@ -96,8 +107,36 @@ export default function ManutenzionePage() {
 
     if (interventiError) {
       setErrore(interventiError.message);
+      setLoading(false);
+      return;
+    }
+
+    const listaInterventi = interventiData || [];
+    setInterventi(listaInterventi);
+
+    if (listaInterventi.length > 0) {
+      const ids = listaInterventi.map((item) => item.id);
+
+      const { data: allegatiData, error: allegatiError } =
+        await supabase
+          .from("court_maintenance_attachments")
+          .select(
+            "id, maintenance_id, file_name, file_path, content_type, file_size, created_at"
+          )
+          .eq("resort_id", membership.resort_id)
+          .in("maintenance_id", ids)
+          .order("created_at", { ascending: true });
+
+      if (allegatiError) {
+        setErrore(
+          "Interventi caricati, ma non è stato possibile leggere gli allegati: " +
+            allegatiError.message
+        );
+      } else {
+        setAllegati(allegatiData || []);
+      }
     } else {
-      setInterventi(interventiData || []);
+      setAllegati([]);
     }
 
     setLoading(false);
@@ -200,6 +239,138 @@ export default function ManutenzionePage() {
     setCompletandoId("");
   }
 
+  async function caricaAllegati(
+    intervento: Intervento,
+    files: FileList | null
+  ) {
+    if (!files || files.length === 0) return;
+
+    if (!isMaestro || !resortId) {
+      setErrore("Solo il Maestro responsabile può caricare allegati.");
+      return;
+    }
+
+    const fileSelezionati = Array.from(files);
+    const tipiConsentiti = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf",
+    ];
+
+    for (const file of fileSelezionati) {
+      if (!tipiConsentiti.includes(file.type)) {
+        setErrore(
+          "Formato non consentito. Puoi caricare immagini JPG, PNG, WEBP e documenti PDF."
+        );
+        return;
+      }
+
+      if (file.size > 15 * 1024 * 1024) {
+        setErrore(
+          "Il file " + file.name + " supera il limite di 15 MB."
+        );
+        return;
+      }
+    }
+
+    setCaricandoAllegatiId(intervento.id);
+    setErrore("");
+    setMessaggio("");
+
+    const supabase = getSupabase();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setErrore("Sessione non valida. Accedi nuovamente.");
+      setCaricandoAllegatiId("");
+      return;
+    }
+
+    for (const file of fileSelezionati) {
+      const nomeSicuro = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const percorso =
+        resortId +
+        "/" +
+        intervento.id +
+        "/" +
+        crypto.randomUUID() +
+        "-" +
+        nomeSicuro;
+
+      const { error: uploadError } = await supabase.storage
+        .from("maintenance-files")
+        .upload(percorso, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        setErrore(
+          "Errore nel caricamento di " +
+            file.name +
+            ": " +
+            uploadError.message
+        );
+        setCaricandoAllegatiId("");
+        await caricaDati();
+        return;
+      }
+
+      const { error: insertError } = await supabase
+        .from("court_maintenance_attachments")
+        .insert({
+          resort_id: resortId,
+          maintenance_id: intervento.id,
+          file_name: file.name,
+          file_path: percorso,
+          content_type: file.type,
+          file_size: file.size,
+          uploaded_by: user.id,
+        });
+
+      if (insertError) {
+        await supabase.storage
+          .from("maintenance-files")
+          .remove([percorso]);
+
+        setErrore(
+          "Il file è stato caricato ma non registrato nell'archivio: " +
+            insertError.message
+        );
+        setCaricandoAllegatiId("");
+        await caricaDati();
+        return;
+      }
+    }
+
+    setMessaggio("Allegati caricati correttamente.");
+    await caricaDati();
+    setCaricandoAllegatiId("");
+  }
+
+  async function apriAllegato(allegato: Allegato) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase.storage
+      .from("maintenance-files")
+      .createSignedUrl(allegato.file_path, 60);
+
+    if (error || !data?.signedUrl) {
+      setErrore(
+        "Non è stato possibile aprire il file: " +
+          (error?.message || "link non disponibile")
+      );
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
   function nomeCampo(id: string) {
     return campi.find((campo) => campo.id === id)?.name || "Campo";
   }
@@ -222,6 +393,11 @@ export default function ManutenzionePage() {
     if (valore === "completed") return "Completato";
     if (valore === "cancelled") return "Annullato";
     return "Aperto";
+  }
+
+  function dimensioneFile(bytes: number | null) {
+    if (!bytes) return "";
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
   }
 
   return (
@@ -375,76 +551,158 @@ export default function ManutenzionePage() {
           <p>Non ci sono ancora interventi registrati.</p>
         )}
 
-        {interventi.map((intervento) => (
-          <article
-            key={intervento.id}
-            style={{
-              background: "white",
-              border: "1px solid #e8dccb",
-              borderRadius: 14,
-              padding: 18,
-              marginBottom: 14,
-            }}
-          >
-            <h3 style={{ color: "#a52b2b", marginTop: 0 }}>
-              {intervento.title}
-            </h3>
+        {interventi.map((intervento) => {
+          const allegatiIntervento = allegati.filter(
+            (allegato) =>
+              allegato.maintenance_id === intervento.id
+          );
 
-            <p>
-              <strong>Campo:</strong>{" "}
-              {nomeCampo(intervento.court_id)}
-            </p>
+          return (
+            <article
+              key={intervento.id}
+              style={{
+                background: "white",
+                border: "1px solid #e8dccb",
+                borderRadius: 14,
+                padding: 18,
+                marginBottom: 14,
+              }}
+            >
+              <h3 style={{ color: "#a52b2b", marginTop: 0 }}>
+                {intervento.title}
+              </h3>
 
-            <p>
-              <strong>Tipo:</strong>{" "}
-              {etichettaTipo(intervento.maintenance_type)}
-            </p>
+              <p>
+                <strong>Campo:</strong>{" "}
+                {nomeCampo(intervento.court_id)}
+              </p>
 
-            <p>
-              <strong>Priorità:</strong>{" "}
-              {etichettaPriorita(intervento.priority)}
-            </p>
+              <p>
+                <strong>Tipo:</strong>{" "}
+                {etichettaTipo(intervento.maintenance_type)}
+              </p>
 
-            <p>
-              <strong>Stato:</strong>{" "}
-              {etichettaStato(intervento.status)}
-            </p>
+              <p>
+                <strong>Priorità:</strong>{" "}
+                {etichettaPriorita(intervento.priority)}
+              </p>
 
-            {intervento.description && (
-              <p>{intervento.description}</p>
-            )}
+              <p>
+                <strong>Stato:</strong>{" "}
+                {etichettaStato(intervento.status)}
+              </p>
 
-            <small>
-              Registrato il{" "}
-              {new Date(intervento.created_at).toLocaleString("it-IT")}
-            </small>
-
-            {isMaestro &&
-              (intervento.status === "open" ||
-                intervento.status === "in_progress") && (
-                <button
-                  onClick={() => completaIntervento(intervento)}
-                  disabled={completandoId === intervento.id}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: 13,
-                    marginTop: 16,
-                    border: "none",
-                    borderRadius: 9,
-                    background: "#287a45",
-                    color: "white",
-                    opacity:
-                      completandoId === intervento.id ? 0.6 : 1,
-                  }}
-                >
-                  {completandoId === intervento.id
-                    ? "Completamento..."
-                    : "Conferma completamento"}
-                </button>
+              {intervento.description && (
+                <p>{intervento.description}</p>
               )}
-          </article>
-        ))}
+
+              <small>
+                Registrato il{" "}
+                {new Date(intervento.created_at).toLocaleString("it-IT")}
+              </small>
+
+              <div
+                style={{
+                  borderTop: "1px solid #e8dccb",
+                  marginTop: 18,
+                  paddingTop: 14,
+                }}
+              >
+                <h4 style={{ color: "#a52b2b", marginTop: 0 }}>
+                  Foto e documenti
+                </h4>
+
+                {allegatiIntervento.length === 0 && (
+                  <p>Nessun allegato presente.</p>
+                )}
+
+                {allegatiIntervento.map((allegato) => (
+                  <button
+                    key={allegato.id}
+                    onClick={() => apriAllegato(allegato)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: 12,
+                      marginBottom: 8,
+                      border: "1px solid #e8dccb",
+                      borderRadius: 8,
+                      background: "#fcf9f6",
+                      color: "#a52b2b",
+                    }}
+                  >
+                    {allegato.content_type?.startsWith("image/")
+                      ? "🖼️ "
+                      : "📄 "}
+                    {allegato.file_name}
+                    {allegato.file_size
+                      ? " · " + dimensioneFile(allegato.file_size)
+                      : ""}
+                    {" · Apri"}
+                  </button>
+                ))}
+
+                {isMaestro && (
+                  <div style={{ marginTop: 14 }}>
+                    <label>
+                      Aggiungi foto o documenti (JPG, PNG, WEBP, PDF)
+                    </label>
+
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      multiple
+                      disabled={
+                        caricandoAllegatiId === intervento.id
+                      }
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        caricaAllegati(intervento, files);
+                        e.target.value = "";
+                      }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        marginTop: 10,
+                        marginBottom: 12,
+                      }}
+                    />
+
+                    {caricandoAllegatiId === intervento.id && (
+                      <p>Caricamento allegati in corso...</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {isMaestro &&
+                (intervento.status === "open" ||
+                  intervento.status === "in_progress") && (
+                  <button
+                    onClick={() => completaIntervento(intervento)}
+                    disabled={completandoId === intervento.id}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      padding: 13,
+                      marginTop: 16,
+                      border: "none",
+                      borderRadius: 9,
+                      background: "#287a45",
+                      color: "white",
+                      opacity:
+                        completandoId === intervento.id ? 0.6 : 1,
+                    }}
+                  >
+                    {completandoId === intervento.id
+                      ? "Completamento..."
+                      : "Conferma completamento"}
+                  </button>
+                )}
+            </article>
+          );
+        })}
       </section>
     </main>
   );
