@@ -16,7 +16,7 @@ export default function CampiPage() {
   const [campi, setCampi] = useState<Campo[]>([]);
   const [loading, setLoading] = useState(true);
   const [errore, setErrore] = useState("");
-const [filtroSport, setFiltroSport] = useState("tutti");
+  const [filtroSport, setFiltroSport] = useState("tutti");
   useEffect(() => {
     async function caricaCampi() {
       const supabase = getSupabase();
