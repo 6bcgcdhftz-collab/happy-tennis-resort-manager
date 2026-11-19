@@ -81,7 +81,67 @@ export default function CampiPage() {
     setMessaggio("");
   }
 
-  async function salvaModifiche() {
+  
+async function salvaModifiche() {
+  if (!campoSelezionato || !resortId) return;
+
+  if (!nome.trim() || !superficie.trim()) {
+    setErrore("Inserisci il nome e la superficie.");
+    return;
+  }
+
+  setSalvando(true);
+  setErrore("");
+  setMessaggio("");
+
+  try {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from("sport_courts")
+      .update({
+        name: nome.trim(),
+        surface: superficie.trim(),
+        status: stato
+      })
+      .eq("id", campoSelezionato.id)
+      .eq("resort_id", resortId)
+      .select("id, name, sport, surface, status")
+      .maybeSingle();
+
+    if (error) {
+      setErrore("Errore durante il salvataggio: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      setErrore(
+        "Nessun campo aggiornato. Verificare i permessi e l'associazione al resort."
+      );
+      return;
+    }
+
+    setCampi((precedenti) =>
+      precedenti.map((campo) =>
+        campo.id === data.id ? data : campo
+      )
+    );
+
+    setCampoSelezionato(data);
+    setNome(data.name);
+    setSuperficie(data.surface);
+    setStato(data.status);
+    setMessaggio("Modifiche salvate correttamente!");
+
+  } catch (err) {
+    setErrore(
+      "Errore imprevisto durante il salvataggio."
+    );
+  } finally {
+    setSalvando(false);
+  }
+}
+ {
     if (!campoSelezionato || !resortId) return;
 
     if (!nome.trim() || !superficie.trim()) {
