@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 
@@ -13,7 +13,7 @@ type Campo = {
   status: string;
 };
 
-export default function CampiPage() {
+function CampiPageContent() {
   const searchParams = useSearchParams();
   const [campi, setCampi] = useState<Campo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -386,5 +386,13 @@ export default function CampiPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function CampiPage() {
+  return (
+    <Suspense fallback={<p>Caricamento campi...</p>}>
+      <CampiPageContent />
+    </Suspense>
   );
 }
