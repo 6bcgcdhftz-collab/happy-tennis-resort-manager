@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 
@@ -32,7 +32,7 @@ type Allegato = {
   created_at: string;
 };
 
-export default function ManutenzionePage() {
+function ManutenzionePageContent() {
   const searchParams = useSearchParams();
   const resortRichiesto = searchParams.get("resort");
 
@@ -710,6 +710,14 @@ export default function ManutenzionePage() {
         })}
       </section>
     </main>
+  );
+}
+
+export default function ManutenzionePage() {
+  return (
+    <Suspense fallback={<p>Caricamento manutenzione...</p>}>
+      <ManutenzionePageContent />
+    </Suspense>
   );
 }
 
