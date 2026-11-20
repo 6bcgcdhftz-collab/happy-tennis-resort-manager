@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 
 type Campo = {
@@ -13,6 +14,7 @@ type Campo = {
 };
 
 export default function CampiPage() {
+  const searchParams = useSearchParams();
   const [campi, setCampi] = useState<Campo[]>([]);
   const [loading, setLoading] = useState(true);
   const [errore, setErrore] = useState("");
@@ -22,6 +24,7 @@ export default function CampiPage() {
     useState<Campo | null>(null);
 
   const [resortId, setResortId] = useState("");
+  const [resortNome, setResortNome] = useState("");
   const [nome, setNome] = useState("");
   const [superficie, setSuperficie] = useState("");
   const [stato, setStato] = useState("active");
@@ -40,21 +43,45 @@ export default function CampiPage() {
         return;
       }
 
-      const { data: membership, error: membershipError } =
+      const resortRichiesto = searchParams.get("resort");
+
+      const { data: memberships, error: membershipError } =
         await supabase
           .from("resort_memberships")
-          .select("resort_id")
-          .eq("user_id", user.id)
-          .limit(1)
-          .single();
+          .select("resort_id, resorts(name)")
+          .eq("user_id", user.id);
 
-      if (membershipError || !membership) {
+      if (membershipError || !memberships?.length) {
         setErrore("Nessun resort associato all'utente.");
         setLoading(false);
         return;
       }
 
+      const membership = resortRichiesto
+        ? memberships.find(
+            (item) => item.resort_id === resortRichiesto
+          )
+        : memberships.find((item) => {
+            const joined = item.resorts as unknown as
+              { name: string } | { name: string }[] | null;
+            const resort = Array.isArray(joined)
+              ? joined[0]
+              : joined;
+            return resort?.name?.toLowerCase() === "mare e sole";
+          }) ?? memberships[0];
+
+      if (!membership) {
+        setErrore("Non hai accesso al resort selezionato.");
+        setLoading(false);
+        return;
+      }
+
+      const joined = membership.resorts as unknown as
+        { name: string } | { name: string }[] | null;
+      const resort = Array.isArray(joined) ? joined[0] : joined;
+
       setResortId(membership.resort_id);
+      setResortNome(resort?.name ?? "Resort");
 
       const { data, error } = await supabase
         .from("sport_courts")
@@ -72,7 +99,7 @@ export default function CampiPage() {
     }
 
     caricaCampi();
-  }, []);
+  }, [searchParams]);
 
   function apriScheda(campo: Campo) {
     setCampoSelezionato(campo);
@@ -111,9 +138,7 @@ export default function CampiPage() {
         .maybeSingle();
 
       if (error) {
-        setErrore(
-          "Errore durante il salvataggio: " + error.message
-        );
+        setErrore("Errore durante il salvataggio: " + error.message);
         return;
       }
 
@@ -144,9 +169,14 @@ export default function CampiPage() {
 
   const campiFiltrati = campi.filter(
     (campo) =>
-      filtroSport === "tutti" ||
-      campo.sport === filtroSport
+      filtroSport === "tutti" || campo.sport === filtroSport
   );
+
+  const conteggio = {
+    tennis: campi.filter((campo) => campo.sport === "tennis").length,
+    padel: campi.filter((campo) => campo.sport === "padel").length,
+    pickleball: campi.filter((campo) => campo.sport === "pickleball").length,
+  };
 
   return (
     <main
@@ -157,11 +187,9 @@ export default function CampiPage() {
         color: "#333",
       }}
     >
-      <h1 style={{ color: "#a52b2b" }}>
-        Gestione campi
-      </h1>
+      <h1 style={{ color: "#a52b2b" }}>Gestione campi</h1>
 
-      <p>Happy Tennis Resort Manager</p>
+      <p>Happy Tennis Resort Manager · {resortNome}</p>
 
       <div
         style={{
@@ -171,9 +199,10 @@ export default function CampiPage() {
           margin: "24px 0",
         }}
       >
-        <strong>6 Tennis</strong>
-        <strong>6 Padel</strong>
-        <strong>6 Pickleball</strong>
+        <strong>{conteggio.tennis} Tennis</strong>
+        <strong>{conteggio.padel} Padel</strong>
+        <strong>{conteggio.pickleball} Pickleball</strong>
+        <strong>{campi.length} Campi totali</strong>
       </div>
 
       <div
@@ -197,14 +226,8 @@ export default function CampiPage() {
               padding: "12px 18px",
               borderRadius: 10,
               border: "1px solid #a52b2b",
-              background:
-                filtroSport === sport.value
-                  ? "#a52b2b"
-                  : "white",
-              color:
-                filtroSport === sport.value
-                  ? "white"
-                  : "#a52b2b",
+              background: filtroSport === sport.value ? "#a52b2b" : "white",
+              color: filtroSport === sport.value ? "white" : "#a52b2b",
             }}
           >
             {sport.label}
@@ -232,17 +255,11 @@ export default function CampiPage() {
               cursor: "pointer",
             }}
           >
-            <h2 style={{ color: "#a52b2b" }}>
-              {campo.name}
-            </h2>
-
+            <h2 style={{ color: "#a52b2b" }}>{campo.name}</h2>
             <p>Sport: {campo.sport}</p>
             <p>Superficie: {campo.surface}</p>
             <p>Stato: {campo.status}</p>
-
-            <strong style={{ color: "#a52b2b" }}>
-              Apri scheda →
-            </strong>
+            <strong style={{ color: "#a52b2b" }}>Apri scheda →</strong>
           </article>
         ))}
 
@@ -326,21 +343,12 @@ export default function CampiPage() {
               }}
             >
               <option value="active">Attivo</option>
-              <option value="maintenance">
-                In manutenzione
-              </option>
-              <option value="inactive">
-                Non disponibile
-              </option>
+              <option value="maintenance">In manutenzione</option>
+              <option value="inactive">Non disponibile</option>
             </select>
 
-            {errore && (
-              <p style={{ color: "red" }}>{errore}</p>
-            )}
-
-            {messaggio && (
-              <p style={{ color: "green" }}>{messaggio}</p>
-            )}
+            {errore && <p style={{ color: "red" }}>{errore}</p>}
+            {messaggio && <p style={{ color: "green" }}>{messaggio}</p>}
 
             <button
               onClick={salvaModifiche}
@@ -356,9 +364,7 @@ export default function CampiPage() {
                 fontSize: 16,
               }}
             >
-              {salvando
-                ? "Salvataggio..."
-                : "Salva modifiche"}
+              {salvando ? "Salvataggio..." : "Salva modifiche"}
             </button>
 
             <button
