@@ -18,9 +18,15 @@ const moduli = [
   { nome: "Documenti contrattuali", attivo: false },
 ];
 
+type ResortOption = {
+  id: string;
+  name: string;
+};
+
 export default function Dashboard() {
   const [email, setEmail] = useState("");
-  const [resort, setResort] = useState("Ambiente resort");
+  const [resorts, setResorts] = useState<ResortOption[]>([]);
+  const [selectedResortId, setSelectedResortId] = useState("");
 
   useEffect(() => {
     const run = async () => {
@@ -34,22 +40,39 @@ export default function Dashboard() {
 
       setEmail(user.email ?? "");
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("resort_memberships")
-        .select("resorts(name)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
+        .select("resort_id, resorts(name)")
+        .eq("user_id", user.id);
 
-      const joined = data?.resorts as unknown as
-        { name: string } | null;
-
-      if (!joined?.name) {
+      if (error || !data || data.length === 0) {
         window.location.href = "/setup";
         return;
       }
 
-      setResort(joined.name);
+      const options = data.map((item) => {
+        const joined = item.resorts as unknown as
+          { name: string } | { name: string }[] | null;
+
+        const resortData = Array.isArray(joined)
+          ? joined[0]
+          : joined;
+
+        return {
+          id: item.resort_id,
+          name: resortData?.name ?? "Resort",
+        };
+      });
+
+      setResorts(options);
+
+      const mareESole = options.find(
+        (item) => item.name.toLowerCase() === "mare e sole"
+      );
+
+      setSelectedResortId(
+        mareESole?.id ?? options[0].id
+      );
     };
 
     run();
@@ -60,6 +83,17 @@ export default function Dashboard() {
     await supabase.auth.signOut();
     window.location.href = "/";
   }
+
+  function apriModulo(percorso: string) {
+    if (!selectedResortId) return;
+
+    window.location.href =
+      `${percorso}?resort=${encodeURIComponent(selectedResortId)}`;
+  }
+
+  const selectedResort = resorts.find(
+    (item) => item.id === selectedResortId
+  );
 
   return (
     <main className="dashboard">
@@ -76,8 +110,27 @@ export default function Dashboard() {
 
       <section className="welcome">
         <span className="eyebrow">AMBIENTE OPERATIVO</span>
-        <h1>{resort}</h1>
+        <h1>{selectedResort?.name ?? "Caricamento..."}</h1>
         <p>Accesso effettuato come {email}</p>
+
+        <label htmlFor="resort-selector">
+          Seleziona il resort
+        </label>
+
+        <select
+          id="resort-selector"
+          value={selectedResortId}
+          onChange={(event) =>
+            setSelectedResortId(event.target.value)
+          }
+        >
+          {resorts.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+
         <div className="notice">
           Le sezioni operative saranno abilitate progressivamente
           durante lo sviluppo.
@@ -90,7 +143,7 @@ export default function Dashboard() {
             key={modulo.nome}
             onClick={() => {
               if (modulo.attivo && modulo.percorso) {
-                window.location.href = modulo.percorso;
+                apriModulo(modulo.percorso);
               }
             }}
             style={{
