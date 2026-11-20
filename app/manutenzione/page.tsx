@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 
 type Campo = {
@@ -32,10 +33,14 @@ type Allegato = {
 };
 
 export default function ManutenzionePage() {
+  const searchParams = useSearchParams();
+  const resortRichiesto = searchParams.get("resort");
+
   const [campi, setCampi] = useState<Campo[]>([]);
   const [interventi, setInterventi] = useState<Intervento[]>([]);
   const [allegati, setAllegati] = useState<Allegato[]>([]);
   const [resortId, setResortId] = useState("");
+  const [resortNome, setResortNome] = useState("");
   const [isMaestro, setIsMaestro] = useState(false);
 
   const [campoId, setCampoId] = useState("");
@@ -52,6 +57,9 @@ export default function ManutenzionePage() {
   const [messaggio, setMessaggio] = useState("");
 
   async function caricaDati() {
+    setLoading(true);
+    setErrore("");
+
     const supabase = getSupabase();
 
     const {
@@ -64,21 +72,41 @@ export default function ManutenzionePage() {
       return;
     }
 
-    const { data: membership, error: membershipError } =
+    const { data: memberships, error: membershipError } =
       await supabase
         .from("resort_memberships")
-        .select("resort_id, role")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
+        .select("resort_id, role, resorts(name)")
+        .eq("user_id", user.id);
 
-    if (membershipError || !membership) {
-      setErrore("Nessun resort attivo associato all'utente.");
+    if (membershipError || !memberships?.length) {
+      setErrore("Nessun resort associato all'utente.");
       setLoading(false);
       return;
     }
 
+    const membership = resortRichiesto
+      ? memberships.find(
+          (item) => item.resort_id === resortRichiesto
+        )
+      : memberships.find((item) => {
+          const joined = item.resorts as unknown as
+            { name: string } | { name: string }[] | null;
+          const resort = Array.isArray(joined) ? joined[0] : joined;
+          return resort?.name?.toLowerCase() === "mare e sole";
+        }) ?? memberships[0];
+
+    if (!membership) {
+      setErrore("Non hai accesso al resort selezionato.");
+      setLoading(false);
+      return;
+    }
+
+    const joined = membership.resorts as unknown as
+      { name: string } | { name: string }[] | null;
+    const resort = Array.isArray(joined) ? joined[0] : joined;
+
     setResortId(membership.resort_id);
+    setResortNome(resort?.name ?? "Resort");
     setIsMaestro(membership.role === "maestro_responsabile");
 
     const { data: campiData, error: campiError } =
@@ -144,7 +172,7 @@ export default function ManutenzionePage() {
 
   useEffect(() => {
     caricaDati();
-  }, []);
+  }, [resortRichiesto]);
 
   async function creaSegnalazione() {
     if (!campoId || !titolo.trim()) {
@@ -153,9 +181,7 @@ export default function ManutenzionePage() {
     }
 
     if (!isMaestro || !resortId) {
-      setErrore(
-        "Solo il Maestro responsabile può registrare interventi."
-      );
+      setErrore("Solo il Maestro responsabile può registrare interventi.");
       return;
     }
 
@@ -199,9 +225,7 @@ export default function ManutenzionePage() {
 
   async function completaIntervento(intervento: Intervento) {
     if (!isMaestro || !resortId) {
-      setErrore(
-        "Solo il Maestro responsabile può confermare il completamento."
-      );
+      setErrore("Solo il Maestro responsabile può confermare il completamento.");
       return;
     }
 
@@ -267,9 +291,7 @@ export default function ManutenzionePage() {
       }
 
       if (file.size > 15 * 1024 * 1024) {
-        setErrore(
-          "Il file " + file.name + " supera il limite di 15 MB."
-        );
+        setErrore("Il file " + file.name + " supera il limite di 15 MB.");
         return;
       }
     }
@@ -410,7 +432,12 @@ export default function ManutenzionePage() {
       }}
     >
       <button
-        onClick={() => (window.location.href = "/dashboard")}
+        onClick={() => {
+          const destinazione = resortId
+            ? `/dashboard?resort=${encodeURIComponent(resortId)}`
+            : "/dashboard";
+          window.location.href = destinazione;
+        }}
         style={{
           padding: "10px 16px",
           border: "1px solid #e8dccb",
@@ -426,18 +453,14 @@ export default function ManutenzionePage() {
         Manutenzione
       </h1>
 
-      <p>Happy Tennis Resort Manager · Stagione 2027</p>
+      <p>Happy Tennis Resort Manager · {resortNome || "Caricamento..."}</p>
 
       {errore && (
-        <p style={{ color: "#b42318", marginTop: 16 }}>
-          {errore}
-        </p>
+        <p style={{ color: "#b42318", marginTop: 16 }}>{errore}</p>
       )}
 
       {messaggio && (
-        <p style={{ color: "#287a45", marginTop: 16 }}>
-          {messaggio}
-        </p>
+        <p style={{ color: "#287a45", marginTop: 16 }}>{messaggio}</p>
       )}
 
       <section
@@ -449,14 +472,12 @@ export default function ManutenzionePage() {
           marginTop: 24,
         }}
       >
-        <h2 style={{ color: "#a52b2b" }}>
-          Nuova segnalazione
-        </h2>
+        <h2 style={{ color: "#a52b2b" }}>Nuova segnalazione</h2>
 
         {!isMaestro && !loading && (
           <p>
-            Accesso in consultazione. Solo il Maestro responsabile
-            può aprire e completare gli interventi.
+            Accesso in consultazione. Solo il Maestro responsabile può
+            aprire e completare gli interventi.
           </p>
         )}
 
@@ -503,9 +524,7 @@ export default function ManutenzionePage() {
         >
           <option value="damage">Guasto</option>
           <option value="ordinary">Manutenzione ordinaria</option>
-          <option value="extraordinary">
-            Manutenzione straordinaria
-          </option>
+          <option value="extraordinary">Manutenzione straordinaria</option>
         </select>
 
         <label>Priorità</label>
@@ -541,9 +560,7 @@ export default function ManutenzionePage() {
       </section>
 
       <section style={{ marginTop: 32 }}>
-        <h2 style={{ color: "#a52b2b" }}>
-          Registro interventi
-        </h2>
+        <h2 style={{ color: "#a52b2b" }}>Registro interventi</h2>
 
         {loading && <p>Caricamento interventi...</p>}
 
@@ -553,8 +570,7 @@ export default function ManutenzionePage() {
 
         {interventi.map((intervento) => {
           const allegatiIntervento = allegati.filter(
-            (allegato) =>
-              allegato.maintenance_id === intervento.id
+            (allegato) => allegato.maintenance_id === intervento.id
           );
 
           return (
@@ -573,28 +589,22 @@ export default function ManutenzionePage() {
               </h3>
 
               <p>
-                <strong>Campo:</strong>{" "}
-                {nomeCampo(intervento.court_id)}
+                <strong>Campo:</strong> {nomeCampo(intervento.court_id)}
               </p>
-
               <p>
                 <strong>Tipo:</strong>{" "}
                 {etichettaTipo(intervento.maintenance_type)}
               </p>
-
               <p>
                 <strong>Priorità:</strong>{" "}
                 {etichettaPriorita(intervento.priority)}
               </p>
-
               <p>
                 <strong>Stato:</strong>{" "}
                 {etichettaStato(intervento.status)}
               </p>
 
-              {intervento.description && (
-                <p>{intervento.description}</p>
-              )}
+              {intervento.description && <p>{intervento.description}</p>}
 
               <small>
                 Registrato il{" "}
@@ -648,14 +658,11 @@ export default function ManutenzionePage() {
                     <label>
                       Aggiungi foto o documenti (JPG, PNG, WEBP, PDF)
                     </label>
-
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,application/pdf"
                       multiple
-                      disabled={
-                        caricandoAllegatiId === intervento.id
-                      }
+                      disabled={caricandoAllegatiId === intervento.id}
                       onChange={(e) => {
                         const files = e.target.files;
                         caricaAllegati(intervento, files);
@@ -668,7 +675,6 @@ export default function ManutenzionePage() {
                         marginBottom: 12,
                       }}
                     />
-
                     {caricandoAllegatiId === intervento.id && (
                       <p>Caricamento allegati in corso...</p>
                     )}
@@ -691,8 +697,7 @@ export default function ManutenzionePage() {
                       borderRadius: 9,
                       background: "#287a45",
                       color: "white",
-                      opacity:
-                        completandoId === intervento.id ? 0.6 : 1,
+                      opacity: completandoId === intervento.id ? 0.6 : 1,
                     }}
                   >
                     {completandoId === intervento.id
