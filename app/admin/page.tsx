@@ -1,47 +1,76 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 
 export default function AdminPage() {
-  const [nome, setNome] = useState("");
   const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState("");
+  const [esito, setEsito] = useState("");
   const [errore, setErrore] = useState("");
 
   useEffect(() => {
     async function verificaAdmin() {
-      const supabase = getSupabase();
+      try {
+        const supabase = getSupabase();
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-      if (userError || !user) {
-        window.location.href = "/";
-        return;
-      }
+        if (userError) {
+          setErrore("Errore di autenticazione: " + userError.message);
+          setLoading(false);
+          return;
+        }
 
-      const { data: admin, error: adminError } = await supabase
-        .from("platform_admins")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        if (!user) {
+          setErrore("Nessun utente autenticato.");
+          setLoading(false);
+          return;
+        }
 
-      if (adminError || !admin) {
-        setErrore("Accesso non autorizzato.");
+        setEmail(user.email || "Email non disponibile");
+        setUserId(user.id);
+
+        const { data: admin, error: adminError } = await supabase
+          .from("platform_admins")
+          .select("user_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (adminError) {
+          setErrore(
+            "Errore nella verifica amministratore: " +
+              adminError.message +
+              (adminError.code ? " (codice: " + adminError.code + ")" : "")
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (!admin) {
+          setEsito(
+            "Nessuna registrazione amministratore trovata per questo account."
+          );
+          setLoading(false);
+          return;
+        }
+
+        setEsito("Account riconosciuto come amministratore della piattaforma.");
+
         setLoading(false);
-        return;
+      } catch (error) {
+        setErrore(
+          error instanceof Error
+            ? error.message
+            : "Errore imprevisto durante la verifica."
+        );
+        setLoading(false);
       }
-
-      const { data: profilo } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setNome(profilo?.full_name || user.email || "Amministratore");
-      setLoading(false);
     }
 
     verificaAdmin();
@@ -85,31 +114,37 @@ export default function AdminPage() {
           marginTop: 32,
         }}
       >
+        <p style={{ color: "#a52b2b", fontWeight: "bold" }}>
+          DIAGNOSTICA AMMINISTRAZIONE
+        </p>
+
         {loading ? (
-          <p>Verifica autorizzazione in corso...</p>
-        ) : errore ? (
-          <p style={{ color: "#b42318" }}>{errore}</p>
+          <p>Verifica dell'account in corso...</p>
         ) : (
           <>
-            <p style={{ color: "#a52b2b", fontWeight: "bold" }}>
-              AMMINISTRAZIONE PIATTAFORMA
-            </p>
-
-            <h1>Benvenuto, {nome}</h1>
+            <h2>Account riconosciuto</h2>
 
             <p>
-              Questa è l'area di amministrazione generale di
-              Happy Tennis Resort Manager.
+              <strong>Email:</strong> {email || "Non disponibile"}
+            </p>
+
+            <p style={{ overflowWrap: "anywhere" }}>
+              <strong>ID account:</strong> {userId || "Non disponibile"}
             </p>
 
             <hr />
 
-            <h2>Gestione piattaforma</h2>
+            <h2>Risultato verifica</h2>
 
-            <p>
-              Qui svilupperemo la gestione dei resort,
-              degli abbonamenti e degli account.
-            </p>
+            {errore ? (
+              <p style={{ color: "#b42318", overflowWrap: "anywhere" }}>
+                {errore}
+              </p>
+            ) : (
+              <p style={{ color: esito.startsWith("Account riconosciuto") ? "#287a45" : "#b42318" }}>
+                {esito}
+              </p>
+            )}
           </>
         )}
       </section>
