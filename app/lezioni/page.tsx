@@ -33,6 +33,7 @@ type Lezione = {
   status: string;
   instructor_user_id: string | null;
   external_instructor_id: string | null;
+  court_id: string | null;
 };
 
 const inputStyle: React.CSSProperties = {
@@ -107,7 +108,10 @@ function LezioniContent() {
       .eq("is_active", true);
 
     if (membershipError || !memberships?.length) {
-      setErrore("Non risultano resort associati a questo account.");
+      setErrore(
+        membershipError?.message ||
+        "Non risultano resort associati a questo account."
+      );
       setLoading(false);
       return;
     }
@@ -117,8 +121,8 @@ function LezioniContent() {
       : memberships.find((item) => {
           const joined = item.resorts as unknown as
             { name: string } | { name: string }[] | null;
-          const r = Array.isArray(joined) ? joined[0] : joined;
-          return r?.name?.toLowerCase() === "mare e sole";
+          const resort = Array.isArray(joined) ? joined[0] : joined;
+          return resort?.name?.toLowerCase() === "mare e sole";
         }) ?? memberships[0];
 
     if (!membership) {
@@ -138,7 +142,7 @@ function LezioniContent() {
     const [staff, esterniData, campiData, lezioniData] = await Promise.all([
       supabase
         .from("resort_memberships")
-        .select("user_id, profiles(full_name)")
+        .select("user_id")
         .eq("resort_id", membership.resort_id)
         .eq("is_active", true),
 
@@ -157,7 +161,9 @@ function LezioniContent() {
 
       supabase
         .from("sports_lessons")
-        .select("id, title, lesson_type, lesson_date, start_time, duration_minutes, price, status, instructor_user_id, external_instructor_id")
+        .select(
+          "id, title, lesson_type, lesson_date, start_time, duration_minutes, price, status, instructor_user_id, external_instructor_id, court_id"
+        )
         .eq("resort_id", membership.resort_id)
         .order("lesson_date", { ascending: false }),
     ]);
@@ -174,16 +180,33 @@ function LezioniContent() {
       return;
     }
 
+    // Recupera separatamente i profili, senza richiedere
+    // una relazione automatica tra profiles e resort_memberships.
+    const userIds = (staff.data || []).map((item) => item.user_id);
+
+    const { data: profili, error: profiliError } = userIds.length
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", userIds)
+      : { data: [], error: null };
+
+    if (profiliError) {
+      setErrore(
+        "Errore nel caricamento dei nomi dello staff: " +
+        profiliError.message
+      );
+      setLoading(false);
+      return;
+    }
+
     setIstruttori(
-      (staff.data || []).map((item: any) => {
-        const profilo = Array.isArray(item.profiles)
-          ? item.profiles[0]
-          : item.profiles;
-        return {
-          user_id: item.user_id,
-          nome: profilo?.full_name || "Collaboratore",
-        };
-      })
+      (staff.data || []).map((item) => ({
+        user_id: item.user_id,
+        nome:
+          profili?.find((profilo) => profilo.id === item.user_id)?.full_name ||
+          "Collaboratore",
+      }))
     );
 
     setEsterni(esterniData.data || []);
@@ -209,9 +232,15 @@ function LezioniContent() {
 
     if (
       tipoIstruttore === "esterno" &&
-      ((!esternoId && (!nomeEsterno.trim() || !cognomeEsterno.trim())))
+      !esternoId &&
+      (!nomeEsterno.trim() || !cognomeEsterno.trim())
     ) {
       setErrore("Seleziona un istruttore esterno o inserisci nome e cognome.");
+      return;
+    }
+
+    if (Number(durata) <= 0 || Number(prezzo) < 0) {
+      setErrore("Controlla durata e prezzo della lezione.");
       return;
     }
 
@@ -234,7 +263,9 @@ function LezioniContent() {
         .single();
 
       if (error || !data) {
-        setErrore("Errore nel salvataggio dell'istruttore: " + error?.message);
+        setErrore(
+          "Errore nel salvataggio dell'istruttore: " + error?.message
+        );
         setSalvando(false);
         return;
       }
@@ -246,8 +277,10 @@ function LezioniContent() {
       .from("sports_lessons")
       .insert({
         resort_id: resortId,
-        instructor_user_id: tipoIstruttore === "interno" ? istruttoreId : null,
-        external_instructor_id: tipoIstruttore === "esterno" ? idEsterno : null,
+        instructor_user_id:
+          tipoIstruttore === "interno" ? istruttoreId : null,
+        external_instructor_id:
+          tipoIstruttore === "esterno" ? idEsterno : null,
         court_id: campoId || null,
         title: titolo.trim(),
         lesson_type: tipoLezione,
@@ -313,9 +346,11 @@ function LezioniContent() {
 
   function nomeIstruttore(lezione: Lezione) {
     if (lezione.instructor_user_id) {
-      return istruttori.find(
-        (item) => item.user_id === lezione.instructor_user_id
-      )?.nome || "Istruttore dello staff";
+      return (
+        istruttori.find(
+          (item) => item.user_id === lezione.instructor_user_id
+        )?.nome || "Istruttore dello staff"
+      );
     }
 
     const esterno = esterni.find(
@@ -449,7 +484,9 @@ function LezioniContent() {
             </select>
           ) : (
             <>
-              <label style={labelStyle}>Istruttori esterni già registrati</label>
+              <label style={labelStyle}>
+                Istruttori esterni già registrati
+              </label>
               <select
                 style={inputStyle}
                 value={esternoId}
@@ -552,7 +589,9 @@ function LezioniContent() {
             disabled={!isMaestro || salvando}
           />
 
-          <label style={labelStyle}>Allievi (un nome e cognome per riga)</label>
+          <label style={labelStyle}>
+            Allievi (un nome e cognome per riga)
+          </label>
           <textarea
             style={{ ...inputStyle, minHeight: 100, resize: "vertical" }}
             value={partecipanti}
@@ -594,21 +633,38 @@ function LezioniContent() {
                     ? "Completata"
                     : lezione.status === "cancelled"
                     ? "Annullata"
-                    : "Programm ata".replace(" ", "")}
+                    : "Programmata"}
                 </span>
               </div>
 
               <h3>{lezione.title}</h3>
-              <p>{lezione.lesson_type === "group" ? "Lezione di gruppo" : "Lezione individuale"}</p>
-              <p><strong>Istruttore:</strong> {nomeIstruttore(lezione)}</p>
-              <p><strong>Campo:</strong> {nomeCampo(null)}</p>
+              <p>
+                {lezione.lesson_type === "group"
+                  ? "Lezione di gruppo"
+                  : "Lezione individuale"}
+              </p>
+              <p>
+                <strong>Istruttore:</strong> {nomeIstruttore(lezione)}
+              </p>
+              <p>
+                <strong>Campo:</strong> {nomeCampo(lezione.court_id)}
+              </p>
               <p>
                 <strong>Data:</strong>{" "}
-                {new Date(lezione.lesson_date + "T00:00:00").toLocaleDateString("it-IT")}
+                {new Date(
+                  lezione.lesson_date + "T00:00:00"
+                ).toLocaleDateString("it-IT")}
               </p>
-              <p><strong>Ora:</strong> {lezione.start_time.slice(0, 5)}</p>
-              <p><strong>Durata:</strong> {lezione.duration_minutes} minuti</p>
-              <p><strong>Prezzo:</strong> € {Number(lezione.price).toFixed(2)}</p>
+              <p>
+                <strong>Ora:</strong> {lezione.start_time.slice(0, 5)}
+              </p>
+              <p>
+                <strong>Durata:</strong> {lezione.duration_minutes} minuti
+              </p>
+              <p>
+                <strong>Prezzo:</strong> €{" "}
+                {Number(lezione.price).toFixed(2)}
+              </p>
             </article>
           ))}
         </section>
