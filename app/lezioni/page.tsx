@@ -84,6 +84,12 @@ function LezioniContent() {
   const [campoId, setCampoId] = useState("");
   const [partecipanti, setPartecipanti] = useState("");
 
+  // Stato del calendario grafico
+  const [calendarioAperto, setCalendarioAperto] = useState(false);
+  const [meseCalendario, setMeseCalendario] = useState(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
+
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [errore, setErrore] = useState("");
@@ -180,8 +186,6 @@ function LezioniContent() {
       return;
     }
 
-    // Recupera separatamente i profili, senza richiedere
-    // una relazione automatica tra profiles e resort_memberships.
     const userIds = (staff.data || []).map((item) => item.user_id);
 
     const { data: profili, error: profiliError } = userIds.length
@@ -218,6 +222,44 @@ function LezioniContent() {
   useEffect(() => {
     caricaDati();
   }, [resortRichiesto]);
+
+  // Cambia mese nel calendario
+  function cambiaMese(differenza: number) {
+    setMeseCalendario(
+      new Date(
+        meseCalendario.getFullYear(),
+        meseCalendario.getMonth() + differenza,
+        1
+      )
+    );
+  }
+
+  // Seleziona una data dal calendario
+  function selezionaData(giorno: number) {
+    const anno = meseCalendario.getFullYear();
+    const mese = String(meseCalendario.getMonth() + 1).padStart(2, "0");
+    const giornoFormattato = String(giorno).padStart(2, "0");
+
+    setDataLezione(`${anno}-${mese}-${giornoFormattato}`);
+    setCalendarioAperto(false);
+  }
+
+  // Seleziona la data odierna
+  function selezionaOggi() {
+    const oggi = new Date();
+
+    const valore = [
+      oggi.getFullYear(),
+      String(oggi.getMonth() + 1).padStart(2, "0"),
+      String(oggi.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    setDataLezione(valore);
+    setMeseCalendario(
+      new Date(oggi.getFullYear(), oggi.getMonth(), 1)
+    );
+    setCalendarioAperto(false);
+  }
 
   async function salvaLezione() {
     if (!resortId || !titolo.trim() || !dataLezione || !oraLezione) {
@@ -365,6 +407,29 @@ function LezioniContent() {
   function nomeCampo(id: string | null) {
     return campi.find((item) => item.id === id)?.name || "Non assegnato";
   }
+
+  const primoGiornoMese = new Date(
+    meseCalendario.getFullYear(),
+    meseCalendario.getMonth(),
+    1
+  );
+
+  const giorniNelMese = new Date(
+    meseCalendario.getFullYear(),
+    meseCalendario.getMonth() + 1,
+    0
+  ).getDate();
+
+  // Lunedì = prima colonna del calendario
+  const spaziIniziali = (primoGiornoMese.getDay() + 6) % 7;
+
+  const dataVisualizzata = dataLezione
+    ? new Date(dataLezione + "T00:00:00").toLocaleDateString("it-IT", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : "Seleziona una data";
 
   return (
     <main className="courts-page">
@@ -545,15 +610,183 @@ function LezioniContent() {
 
           <div className="courts-stats" style={{ marginTop: 12 }}>
             <div>
-              <label style={labelStyle}>Data</label>
-              <input
-                style={inputStyle}
-                type="date"
-                value={dataLezione}
-                onChange={(e) => setDataLezione(e.target.value)}
+              <label style={labelStyle}>Data della lezione</label>
+
+              <button
+                type="button"
+                onClick={() => setCalendarioAperto(!calendarioAperto)}
                 disabled={!isMaestro || salvando}
-              />
+                style={{
+                  ...inputStyle,
+                  marginTop: 7,
+                  textAlign: "left",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  minHeight: 48,
+                }}
+              >
+                <span>{dataVisualizzata}</span>
+                <span>📅</span>
+              </button>
+
+              {calendarioAperto && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: 14,
+                    background: "#ffffff",
+                    border: "1px solid #dfd1c1",
+                    borderRadius: 12,
+                    boxShadow: "0 8px 24px rgba(50,30,20,0.12)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 14,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => cambiaMese(-1)}
+                      aria-label="Mese precedente"
+                      style={{
+                        padding: 8,
+                        border: 0,
+                        background: "transparent",
+                        color: "#762326",
+                        fontSize: 24,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ‹
+                    </button>
+
+                    <strong
+                      style={{
+                        color: "#762326",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {meseCalendario.toLocaleDateString("it-IT", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </strong>
+
+                    <button
+                      type="button"
+                      onClick={() => cambiaMese(1)}
+                      aria-label="Mese successivo"
+                      style={{
+                        padding: 8,
+                        border: 0,
+                        background: "transparent",
+                        color: "#762326",
+                        fontSize: 24,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ›
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                      gap: 4,
+                      textAlign: "center",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {["L", "M", "M", "G", "V", "S", "D"].map(
+                      (giorno, i) => (
+                        <strong
+                          key={i}
+                          style={{
+                            color: "#806b60",
+                            fontSize: 12,
+                            padding: 5,
+                          }}
+                        >
+                          {giorno}
+                        </strong>
+                      )
+                    )}
+
+                    {Array.from({ length: spaziIniziali }).map((_, i) => (
+                      <span key={`vuoto-${i}`} />
+                    ))}
+
+                    {Array.from(
+                      { length: giorniNelMese },
+                      (_, i) => i + 1
+                    ).map((giorno) => {
+                      const anno = meseCalendario.getFullYear();
+                      const mese = String(
+                        meseCalendario.getMonth() + 1
+                      ).padStart(2, "0");
+                      const giornoFormattato = String(giorno).padStart(
+                        2,
+                        "0"
+                      );
+                      const valore = `${anno}-${mese}-${giornoFormattato}`;
+                      const selezionato = dataLezione === valore;
+
+                      return (
+                        <button
+                          key={valore}
+                          type="button"
+                          onClick={() => selezionaData(giorno)}
+                          style={{
+                            minWidth: 0,
+                            minHeight: 38,
+                            padding: 2,
+                            border: selezionato
+                              ? "1px solid #762326"
+                              : "1px solid transparent",
+                            borderRadius: 8,
+                            background: selezionato
+                              ? "#762326"
+                              : "#fffaf5",
+                            color: selezionato ? "#ffffff" : "#302b29",
+                            fontWeight: selezionato ? 700 : 500,
+                            cursor: "pointer",
+                            fontSize: 14,
+                          }}
+                        >
+                          {giorno}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={selezionaOggi}
+                    style={{
+                      width: "100%",
+                      marginTop: 10,
+                      padding: 10,
+                      border: "1px solid #dfd1c1",
+                      borderRadius: 8,
+                      background: "#fffaf5",
+                      color: "#762326",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Oggi
+                  </button>
+                </div>
+              )}
             </div>
+
             <div>
               <label style={labelStyle}>Ora di inizio</label>
               <input
@@ -564,6 +797,7 @@ function LezioniContent() {
                 disabled={!isMaestro || salvando}
               />
             </div>
+
             <div>
               <label style={labelStyle}>Durata in minuti</label>
               <input
