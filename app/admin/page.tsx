@@ -38,24 +38,45 @@ const etichetteStato: Record<string, string> = {
   cancelled: "Annullato",
 };
 
-const stileInput: React.CSSProperties = {
+const inputStyle: React.CSSProperties = {
+  display: "block",
   width: "100%",
-  padding: "12px",
-  border: "1px solid #d8d0c5",
-  borderRadius: 8,
-  fontSize: 15,
-  background: "white",
   boxSizing: "border-box",
+  padding: "13px 14px",
+  border: "1px solid #dfd1c1",
+  borderRadius: 9,
+  background: "#fff",
+  color: "#302b29",
+  fontSize: 15,
+  marginTop: 7,
 };
 
-const stileBottone: React.CSSProperties = {
-  padding: "12px 18px",
-  background: "#a52b2b",
-  color: "white",
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  color: "#604c42",
+  fontSize: 13,
+  fontWeight: 700,
+  marginTop: 15,
+};
+
+const buttonStyle: React.CSSProperties = {
+  padding: "13px 19px",
   border: "none",
-  borderRadius: 8,
-  fontWeight: 600,
+  borderRadius: 9,
+  background: "#762326",
+  color: "white",
+  fontSize: 14,
+  fontWeight: 700,
   cursor: "pointer",
+};
+
+const panelStyle: React.CSSProperties = {
+  background: "#fffdf9",
+  border: "1px solid #eadfce",
+  borderRadius: 15,
+  padding: 22,
+  marginTop: 22,
+  boxShadow: "0 5px 18px rgba(75,36,16,.06)",
 };
 
 export default function AdminPage() {
@@ -76,6 +97,14 @@ export default function AdminPage() {
 
   const supabase = getSupabase();
 
+  function tornaDashboard() {
+    const resortSalvato = localStorage.getItem("happy-tennis-resort");
+
+    window.location.href = resortSalvato
+      ? `/dashboard?resort=${encodeURIComponent(resortSalvato)}`
+      : "/dashboard";
+  }
+
   async function caricaResort() {
     setErrore("");
     setMessaggio("");
@@ -93,9 +122,11 @@ export default function AdminPage() {
     setResort(elenco);
 
     const nuoviStati: Record<string, string> = {};
+
     elenco.forEach((r) => {
       nuoviStati[r.resort_id] = r.subscription_status || "pending";
     });
+
     setStatiResort(nuoviStati);
 
     if (elenco.length > 0 && !resortSelezionato) {
@@ -106,8 +137,10 @@ export default function AdminPage() {
   useEffect(() => {
     async function verificaAccesso() {
       try {
-        const { data: { user }, error: userError } =
-          await supabase.auth.getUser();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
         if (userError || !user) {
           setErrore("Devi effettuare l'accesso per continuare.");
@@ -124,13 +157,17 @@ export default function AdminPage() {
           .maybeSingle();
 
         if (adminError) {
-          setErrore("Errore nella verifica amministratore: " + adminError.message);
+          setErrore(
+            "Errore nella verifica amministratore: " + adminError.message
+          );
           setLoading(false);
           return;
         }
 
         if (!admin) {
-          setErrore("Questo account non è autorizzato ad amministrare la piattaforma.");
+          setErrore(
+            "Questo account non è autorizzato ad amministrare la piattaforma."
+          );
           setLoading(false);
           return;
         }
@@ -148,9 +185,11 @@ export default function AdminPage() {
           setResort(elenco);
 
           const nuoviStati: Record<string, string> = {};
+
           elenco.forEach((r) => {
             nuoviStati[r.resort_id] = r.subscription_status || "pending";
           });
+
           setStatiResort(nuoviStati);
 
           if (elenco.length > 0) {
@@ -188,7 +227,9 @@ export default function AdminPage() {
       setErrore("Creazione non riuscita: " + error.message);
     } else {
       setNuovoNome("");
-      setMessaggio("Nuovo resort creato. Abbonamento in attesa di attivazione.");
+      setMessaggio(
+        "Nuovo resort creato. Abbonamento in attesa di attivazione."
+      );
       await caricaResort();
     }
 
@@ -241,7 +282,9 @@ export default function AdminPage() {
     );
 
     if (error) {
-      setErrore("Aggiornamento abbonamento non riuscito: " + error.message);
+      setErrore(
+        "Aggiornamento abbonamento non riuscito: " + error.message
+      );
     } else {
       setMessaggio("Stato dell'abbonamento aggiornato.");
       await caricaResort();
@@ -262,7 +305,12 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main style={{ padding: 30, fontFamily: "Arial" }}>
+      <main style={{
+        minHeight: "100vh",
+        padding: 30,
+        background: "#fcf9f6",
+        color: "#762326",
+      }}>
         Verifica accesso e caricamento pannello...
       </main>
     );
@@ -272,14 +320,14 @@ export default function AdminPage() {
     return (
       <main style={{
         minHeight: "100vh",
-        padding: 30,
+        padding: 25,
         background: "#fcf9f6",
-        fontFamily: "Arial",
+        color: "#302b29",
       }}>
-        <h1 style={{ color: "#a52b2b" }}>Happy Tennis</h1>
+        <h1 style={{ color: "#762326" }}>Happy Tennis</h1>
         <h2>Accesso non autorizzato</h2>
         <p>{errore}</p>
-        <button style={stileBottone} onClick={logout}>Esci</button>
+        <button style={buttonStyle} onClick={logout}>Esci</button>
       </main>
     );
   }
@@ -287,250 +335,447 @@ export default function AdminPage() {
   return (
     <main style={{
       minHeight: "100vh",
-      background: "#fcf9f6",
-      color: "#292929",
-      padding: "20px",
+      background: "#f8f4ee",
+      color: "#302b29",
       fontFamily: "Arial, sans-serif",
+      paddingBottom: 30,
     }}>
       <header style={{
+        minHeight: 300,
+        padding: "25px clamp(18px, 5vw, 65px)",
+        color: "white",
+        backgroundImage:
+          "linear-gradient(90deg, rgba(43,13,15,.91), rgba(43,13,15,.42)), url('/happy-tennis-cover.jpg')",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
         display: "flex",
+        flexDirection: "column",
         justifyContent: "space-between",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 12,
-        borderBottom: "1px solid #e5d8c8",
-        paddingBottom: 18,
-      }}>
-        <div>
-          <h1 style={{ color: "#a52b2b", margin: 0 }}>
-            Happy Tennis
-          </h1>
-          <p style={{ margin: "6px 0 0", color: "#806d5a" }}>
-            Amministrazione generale della piattaforma
-          </p>
-        </div>
-        <button style={stileBottone} onClick={logout}>Esci</button>
-      </header>
-
-      <section style={{
-        background: "white",
-        padding: 20,
-        borderRadius: 14,
-        border: "1px solid #e8dccb",
-        marginTop: 22,
-      }}>
-        <p style={{ color: "#806d5a", margin: "0 0 5px" }}>
-          ACCOUNT AMMINISTRATORE
-        </p>
-        <strong>{email}</strong>
-        <h2 style={{ marginBottom: 5 }}>Pannello di controllo</h2>
-        <p style={{ color: "#6d6258", marginTop: 5 }}>
-          Gestisci resort, account dello staff e abbonamenti.
-        </p>
-      </section>
-
-      {errore && (
-        <div style={{
-          background: "#fff0ef",
-          color: "#a52b2b",
-          padding: 14,
-          borderRadius: 8,
-          marginTop: 18,
-          overflowWrap: "anywhere",
-        }}>
-          {errore}
-        </div>
-      )}
-
-      {messaggio && (
-        <div style={{
-          background: "#edf7ef",
-          color: "#287a45",
-          padding: 14,
-          borderRadius: 8,
-          marginTop: 18,
-        }}>
-          {messaggio}
-        </div>
-      )}
-
-      <section style={{
-        background: "white",
-        padding: 20,
-        borderRadius: 14,
-        border: "1px solid #e8dccb",
-        marginTop: 22,
-      }}>
-        <h2 style={{ marginTop: 0 }}>Crea un nuovo resort</h2>
-        <form onSubmit={creaResort} style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-        }}>
-          <input
-            style={{ ...stileInput, flex: "1 1 220px" }}
-            value={nuovoNome}
-            onChange={(e) => setNuovoNome(e.target.value)}
-            placeholder="Nome del nuovo resort"
-            maxLength={120}
-          />
-          <button style={stileBottone} disabled={creazione}>
-            {creazione ? "Creazione..." : "Crea resort"}
-          </button>
-        </form>
-        <p style={{ color: "#806d5a", fontSize: 13 }}>
-          Il nuovo resort verrà creato con abbonamento in attesa.
-        </p>
-      </section>
-
-      <section style={{
-        background: "white",
-        padding: 20,
-        borderRadius: 14,
-        border: "1px solid #e8dccb",
-        marginTop: 22,
+        gap: 30,
       }}>
         <div style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: 12,
+          gap: 14,
         }}>
-          <h2 style={{ margin: 0 }}>Resort registrati ({resort.length})</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 34 }}>🎾</span>
+            <div>
+              <strong style={{ display: "block", fontSize: 22 }}>
+                Happy Tennis
+              </strong>
+              <span style={{
+                color: "#f1d49b",
+                fontSize: 10,
+                letterSpacing: 3,
+              }}>
+                RESORT MANAGER
+              </span>
+            </div>
+          </div>
+
           <button
-            style={{ ...stileBottone, background: "#806d5a" }}
-            onClick={caricaResort}
+            onClick={logout}
+            style={{
+              ...buttonStyle,
+              background: "rgba(255,255,255,.14)",
+              border: "1px solid rgba(255,255,255,.55)",
+            }}
           >
-            Aggiorna elenco
+            Esci ↗
           </button>
         </div>
 
-        {resort.length === 0 ? (
-          <p>Nessun resort registrato.</p>
-        ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-            gap: 16,
-            marginTop: 18,
+        <div>
+          <span style={{
+            color: "#f1d49b",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 3,
           }}>
-            {resort.map((r) => (
-              <article key={r.resort_id} style={{
-                border: "1px solid #e8dccb",
-                borderRadius: 12,
-                padding: 16,
-                minWidth: 0,
-              }}>
-                <h3 style={{ color: "#a52b2b", marginTop: 0 }}>
-                  {r.resort_name}
-                </h3>
+            CONTROLLO DELLA PIATTAFORMA
+          </span>
 
-                <p>Registrazione: {dataItaliana(r.resort_created_at)}</p>
-                <p>Collaboratori associati: <strong>{r.staff_count}</strong></p>
-                <p>
-                  Abbonamento: <strong>
-                    {etichetteStato[r.subscription_status || "pending"]}
-                  </strong>
-                </p>
-                <p>Scadenza periodo: {dataItaliana(r.subscription_period_end || "")}</p>
+          <h1 style={{
+            fontFamily: "Georgia, serif",
+            fontSize: "clamp(34px, 6vw, 54px)",
+            margin: "12px 0",
+            color: "white",
+          }}>
+            Amministrazione generale
+          </h1>
 
-                <label style={{ display: "block", marginTop: 14, marginBottom: 6 }}>
-                  Modifica stato abbonamento
-                </label>
-                <select
-                  style={stileInput}
-                  value={statiResort[r.resort_id] || "pending"}
-                  onChange={(e) => setStatiResort({
-                    ...statiResort,
-                    [r.resort_id]: e.target.value,
-                  })}
-                >
-                  {stati.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+          <p style={{
+            color: "#fff4e8",
+            fontSize: 15,
+            maxWidth: 580,
+            lineHeight: 1.6,
+          }}>
+            Gestione centralizzata dei resort, degli account dello staff
+            e degli abbonamenti Happy Tennis.
+          </p>
+        </div>
 
-                <button
-                  style={{ ...stileBottone, width: "100%", marginTop: 10 }}
-                  onClick={() => salvaStato(r.resort_id)}
-                  disabled={salvataggioStato === r.resort_id}
-                >
-                  {salvataggioStato === r.resort_id
-                    ? "Salvataggio..."
-                    : "Salva stato abbonamento"}
-                </button>
-              </article>
-            ))}
+        <div style={{
+          color: "#f1d49b",
+          fontSize: 11,
+          letterSpacing: 2,
+          fontWeight: 700,
+        }}>
+          ⭐ PREMIUM RESORT MANAGEMENT
+        </div>
+      </header>
+
+      <div style={{
+        width: "min(1180px, 100%)",
+        boxSizing: "border-box",
+        padding: "24px clamp(14px, 4vw, 35px)",
+        margin: "0 auto",
+      }}>
+        <button
+          onClick={tornaDashboard}
+          style={{
+            ...buttonStyle,
+            background: "white",
+            color: "#762326",
+            border: "1px solid #dfd1c1",
+            boxShadow: "0 3px 10px rgba(75,36,16,.06)",
+          }}
+        >
+          ← Torna alla Dashboard
+        </button>
+
+        <section style={panelStyle}>
+          <span style={{
+            color: "#b58a42",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 2,
+          }}>
+            ACCOUNT AMMINISTRATORE
+          </span>
+
+          <h2 style={{
+            color: "#762326",
+            fontFamily: "Georgia, serif",
+            marginBottom: 8,
+          }}>
+            Pannello di controllo
+          </h2>
+
+          <p style={{ color: "#70645b", marginBottom: 5 }}>
+            Account collegato:
+          </p>
+
+          <strong style={{ overflowWrap: "anywhere" }}>{email}</strong>
+
+          <p style={{ color: "#70645b", marginBottom: 0 }}>
+            Gestisci resort, account dello staff e abbonamenti.
+          </p>
+        </section>
+
+        {errore && (
+          <div style={{
+            padding: 15,
+            marginTop: 18,
+            borderRadius: 10,
+            background: "#fff0ef",
+            border: "1px solid #f0c7c3",
+            color: "#a52b2b",
+            overflowWrap: "anywhere",
+          }}>
+            {errore}
           </div>
         )}
-      </section>
 
-      <section style={{
-        background: "white",
-        padding: 20,
-        borderRadius: 14,
-        border: "1px solid #e8dccb",
-        marginTop: 22,
-      }}>
-        <h2 style={{ marginTop: 0 }}>Associa un account a un resort</h2>
-        <p style={{ color: "#6d6258" }}>
-          L'utente deve avere già creato il proprio account Happy Tennis.
-        </p>
+        {messaggio && (
+          <div style={{
+            padding: 15,
+            marginTop: 18,
+            borderRadius: 10,
+            background: "#edf7ef",
+            border: "1px solid #c9e5d0",
+            color: "#287a45",
+          }}>
+            {messaggio}
+          </div>
+        )}
 
-        <form onSubmit={associaUtente}>
-          <label>Resort</label>
-          <select
-            style={{ ...stileInput, marginTop: 6, marginBottom: 14 }}
-            value={resortSelezionato}
-            onChange={(e) => setResortSelezionato(e.target.value)}
-            required
+        <section style={panelStyle}>
+          <span style={{
+            color: "#b58a42",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 2,
+          }}>
+            NUOVO CLIENTE
+          </span>
+
+          <h2 style={{
+            color: "#762326",
+            fontFamily: "Georgia, serif",
+            marginTop: 8,
+          }}>
+            Crea un nuovo resort
+          </h2>
+
+          <form
+            onSubmit={creaResort}
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "end",
+            }}
           >
-            {resort.map((r) => (
-              <option key={r.resort_id} value={r.resort_id}>
-                {r.resort_name}
-              </option>
-            ))}
-          </select>
+            <div style={{ flex: "1 1 230px" }}>
+              <label style={labelStyle}>Nome del resort</label>
+              <input
+                style={inputStyle}
+                value={nuovoNome}
+                onChange={(e) => setNuovoNome(e.target.value)}
+                placeholder="Nome del nuovo resort"
+                maxLength={120}
+              />
+            </div>
 
-          <label>Email dell'account</label>
-          <input
-            style={{ ...stileInput, marginTop: 6, marginBottom: 14 }}
-            type="email"
-            value={emailUtente}
-            onChange={(e) => setEmailUtente(e.target.value)}
-            placeholder="nome@email.it"
-            required
-          />
+            <button
+              style={buttonStyle}
+              disabled={creazione}
+            >
+              {creazione ? "Creazione..." : "＋ Crea resort"}
+            </button>
+          </form>
 
-          <label>Ruolo da assegnare</label>
-          <select
-            style={{ ...stileInput, marginTop: 6, marginBottom: 14 }}
-            value={ruolo}
-            onChange={(e) => setRuolo(e.target.value)}
-          >
-            {ruoli.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
+          <p style={{
+            color: "#806d5a",
+            fontSize: 13,
+            marginBottom: 0,
+          }}>
+            Il nuovo resort verrà creato con abbonamento in attesa.
+          </p>
+        </section>
 
-          <button
-            style={stileBottone}
-            disabled={associazione || resort.length === 0}
-          >
-            {associazione ? "Associazione..." : "Associa account"}
-          </button>
-        </form>
-      </section>
+        <section style={panelStyle}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 12,
+          }}>
+            <div>
+              <span style={{
+                color: "#b58a42",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 2,
+              }}>
+                PORTAFOGLIO CLIENTI
+              </span>
 
-      <footer style={{
-        textAlign: "center",
-        color: "#806d5a",
-        fontSize: 13,
-        padding: "28px 0",
-      }}>
-        Happy Tennis Resort Manager · Amministrazione piattaforma
-      </footer>
+              <h2 style={{
+                color: "#762326",
+                fontFamily: "Georgia, serif",
+                margin: "8px 0",
+              }}>
+                Resort registrati ({resort.length})
+              </h2>
+            </div>
+
+            <button
+              style={{
+                ...buttonStyle,
+                background: "#806d5a",
+              }}
+              onClick={caricaResort}
+            >
+              ↻ Aggiorna elenco
+            </button>
+          </div>
+
+          {resort.length === 0 ? (
+            <p>Nessun resort registrato.</p>
+          ) : (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+              gap: 16,
+              marginTop: 18,
+            }}>
+              {resort.map((r) => (
+                <article
+                  key={r.resort_id}
+                  style={{
+                    border: "1px solid #eadfce",
+                    borderRadius: 13,
+                    padding: 18,
+                    background: "#fff",
+                    minWidth: 0,
+                  }}
+                >
+                  <h3 style={{
+                    color: "#762326",
+                    fontFamily: "Georgia, serif",
+                    fontSize: 22,
+                    marginTop: 0,
+                    overflowWrap: "anywhere",
+                  }}>
+                    {r.resort_name}
+                  </h3>
+
+                  <p>
+                    <strong>Registrazione:</strong>{" "}
+                    {dataItaliana(r.resort_created_at)}
+                  </p>
+
+                  <p>
+                    <strong>Collaboratori associati:</strong>{" "}
+                    {r.staff_count}
+                  </p>
+
+                  <p>
+                    <strong>Abbonamento:</strong>{" "}
+                    {etichetteStato[r.subscription_status || "pending"]}
+                  </p>
+
+                  <p>
+                    <strong>Scadenza periodo:</strong>{" "}
+                    {dataItaliana(r.subscription_period_end || "")}
+                  </p>
+
+                  <label style={labelStyle}>
+                    Modifica stato abbonamento
+                  </label>
+
+                  <select
+                    style={inputStyle}
+                    value={statiResort[r.resort_id] || "pending"}
+                    onChange={(e) =>
+                      setStatiResort({
+                        ...statiResort,
+                        [r.resort_id]: e.target.value,
+                      })
+                    }
+                  >
+                    {stati.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    style={{
+                      ...buttonStyle,
+                      width: "100%",
+                      marginTop: 12,
+                    }}
+                    onClick={() => salvaStato(r.resort_id)}
+                    disabled={salvataggioStato === r.resort_id}
+                  >
+                    {salvataggioStato === r.resort_id
+                      ? "Salvataggio..."
+                      : "Salva stato abbonamento"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={panelStyle}>
+          <span style={{
+            color: "#b58a42",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 2,
+          }}>
+            GESTIONE UTENTI
+          </span>
+
+          <h2 style={{
+            color: "#762326",
+            fontFamily: "Georgia, serif",
+            marginTop: 8,
+          }}>
+            Associa un account a un resort
+          </h2>
+
+          <p style={{ color: "#70645b" }}>
+            L'utente deve avere già creato il proprio account Happy Tennis.
+          </p>
+
+          <form onSubmit={associaUtente}>
+            <label style={labelStyle}>Resort</label>
+
+            <select
+              style={inputStyle}
+              value={resortSelezionato}
+              onChange={(e) => setResortSelezionato(e.target.value)}
+              required
+            >
+              {resort.map((r) => (
+                <option key={r.resort_id} value={r.resort_id}>
+                  {r.resort_name}
+                </option>
+              ))}
+            </select>
+
+            <label style={labelStyle}>Email dell'account</label>
+
+            <input
+              style={inputStyle}
+              type="email"
+              value={emailUtente}
+              onChange={(e) => setEmailUtente(e.target.value)}
+              placeholder="nome@email.it"
+              required
+            />
+
+            <label style={labelStyle}>Ruolo da assegnare</label>
+
+            <select
+              style={inputStyle}
+              value={ruolo}
+              onChange={(e) => setRuolo(e.target.value)}
+            >
+              {ruoli.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+
+            <button
+              style={{
+                ...buttonStyle,
+                width: "100%",
+                marginTop: 20,
+              }}
+              disabled={associazione || resort.length === 0}
+            >
+              {associazione ? "Associazione..." : "Associa account"}
+            </button>
+          </form>
+        </section>
+
+        <footer style={{
+          textAlign: "center",
+          color: "#9a8878",
+          fontSize: 11,
+          letterSpacing: 1,
+          padding: "30px 0 10px",
+          borderTop: "1px solid #e8ddcf",
+          marginTop: 30,
+        }}>
+          HAPPY TENNIS RESORT MANAGER
+          <br />
+          AMMINISTRAZIONE GENERALE DELLA PIATTAFORMA
+        </footer>
+      </div>
     </main>
   );
 }
