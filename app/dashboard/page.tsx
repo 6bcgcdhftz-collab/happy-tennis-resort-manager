@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -52,6 +51,7 @@ export default function Dashboard() {
   useEffect(() => {
     const run = async () => {
       const supabase = getSupabase();
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -100,11 +100,35 @@ export default function Dashboard() {
 
       setResorts(options);
 
-      const mareESole = options.find(
+      const resortNellIndirizzo = new URLSearchParams(
+        window.location.search
+      ).get("resort");
+
+      const resortSalvato = localStorage.getItem(
+        "happy-tennis-resort"
+      );
+
+      const resortPredefinito = options.find(
         (item) => item.name.toLowerCase() === "mare e sole"
       );
 
-      setSelectedResortId(mareESole?.id ?? options[0].id);
+      const resortDaAprire =
+        options.find(
+          (item) => item.id === resortNellIndirizzo
+        ) ??
+        options.find(
+          (item) => item.id === resortSalvato
+        ) ??
+        resortPredefinito ??
+        options[0];
+
+      setSelectedResortId(resortDaAprire.id);
+
+      localStorage.setItem(
+        "happy-tennis-resort",
+        resortDaAprire.id
+      );
+
       setLoading(false);
     };
 
@@ -125,9 +149,11 @@ export default function Dashboard() {
       if (error || !data) return;
 
       setTotalCourts(data.length);
+
       setActiveCourts(
         data.filter((court) => court.status === "active").length
       );
+
       setMaintenanceCourts(
         data.filter((court) => court.status === "maintenance").length
       );
@@ -140,6 +166,21 @@ export default function Dashboard() {
     const supabase = getSupabase();
     await supabase.auth.signOut();
     window.location.href = "/";
+  }
+
+  function cambiaResort(nuovoResortId: string) {
+    setSelectedResortId(nuovoResortId);
+
+    localStorage.setItem(
+      "happy-tennis-resort",
+      nuovoResortId
+    );
+
+    window.history.replaceState(
+      null,
+      "",
+      `/dashboard?resort=${encodeURIComponent(nuovoResortId)}`
+    );
   }
 
   function apriModulo(percorso: string) {
@@ -165,7 +206,14 @@ export default function Dashboard() {
         <nav className="sidebar-nav">
           <div className="sidebar-label">MENU PRINCIPALE</div>
 
-          <a className="sidebar-link selected" href="/dashboard">
+          <a
+            className="sidebar-link selected"
+            href={
+              selectedResortId
+                ? `/dashboard?resort=${encodeURIComponent(selectedResortId)}`
+                : "/dashboard"
+            }
+          >
             <span>⌂</span> Dashboard
           </a>
 
@@ -192,12 +240,16 @@ export default function Dashboard() {
             <span className="connection-dot" />
             {isOnline ? "Online" : "Offline"}
           </div>
+
           <p>
             {isOnline
               ? "Connessione disponibile"
               : "Connessione assente. La modalità offline completa è in sviluppo."}
           </p>
-          <div className="sidebar-version">Happy Tennis Resort Manager</div>
+
+          <div className="sidebar-version">
+            Happy Tennis Resort Manager
+          </div>
         </div>
       </aside>
 
@@ -205,7 +257,9 @@ export default function Dashboard() {
         <header className="dashboard-topbar">
           <div>
             <span className="topbar-eyebrow">AMBIENTE OPERATIVO</span>
-            <strong>{selectedResort?.name ?? "Caricamento resort..."}</strong>
+            <strong>
+              {selectedResort?.name ?? "Caricamento resort..."}
+            </strong>
           </div>
 
           <div className="topbar-actions">
@@ -229,21 +283,29 @@ export default function Dashboard() {
         <div className="dashboard-content">
           <section className="dashboard-welcome">
             <div>
-              <span className="welcome-eyebrow">BENVENUTO IN HAPPY TENNIS</span>
+              <span className="welcome-eyebrow">
+                BENVENUTO IN HAPPY TENNIS
+              </span>
+
               <h1>Il tuo resort, sotto controllo.</h1>
+
               <p>
                 Tutte le attività sportive e operative in un unico spazio.
               </p>
+
               <span className="welcome-email">{email}</span>
             </div>
 
             <div className="resort-selector-box">
-              <label htmlFor="resort-selector">RESORT ATTIVO</label>
+              <label htmlFor="resort-selector">
+                RESORT ATTIVO
+              </label>
+
               <select
                 id="resort-selector"
                 value={selectedResortId}
                 onChange={(event) =>
-                  setSelectedResortId(event.target.value)
+                  cambiaResort(event.target.value)
                 }
               >
                 {resorts.map((item) => (
@@ -285,7 +347,9 @@ export default function Dashboard() {
             <div>
               <span className="welcome-eyebrow">ORGANIZZAZIONE</span>
               <h2>Moduli del resort</h2>
-              <p>Seleziona un'area per accedere alle sue funzioni.</p>
+              <p>
+                Seleziona un'area per accedere alle sue funzioni.
+              </p>
             </div>
           </section>
 
@@ -306,13 +370,17 @@ export default function Dashboard() {
                 <span className="module-number">
                   {String(index + 1).padStart(2, "0")}
                 </span>
+
                 <span className="module-icon">{modulo.icona}</span>
+
                 <span className="module-name">{modulo.nome}</span>
+
                 <span className="module-description">
                   {modulo.attivo
                     ? "Apri sezione"
                     : "Modulo in preparazione"}
                 </span>
+
                 <span className="module-arrow">
                   {modulo.attivo ? "→" : "•"}
                 </span>
