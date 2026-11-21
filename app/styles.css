@@ -562,3 +562,311 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== HAPPY TENNIS - PAGINA INIZIALE ===== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #382b29;
+}
+
+body {
+  background: #faf7f2;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
+  background: #faf7f2;
+}
+
+.hero {
+  min-height: 100vh;
+  padding: 42px clamp(24px, 5vw, 76px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: white;
+  background:
+    linear-gradient(90deg, rgba(42, 12, 14, .82), rgba(42, 12, 14, .24)),
+    linear-gradient(0deg, rgba(35, 12, 12, .35), transparent),
+    url("/happy-tennis-cover.jpg") center center / cover no-repeat;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ball {
+  color: #d8b36b;
+  font-size: 42px;
+  text-shadow: 0 2px 12px #0006;
+}
+
+.brand strong {
+  display: block;
+  font-family: Georgia, serif;
+  font-size: clamp(25px, 3vw, 38px);
+  letter-spacing: -.5px;
+}
+
+.brand em {
+  display: inline-block;
+  color: #f0d49d;
+  font-family: Georgia, serif;
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+.brand small {
+  color: #e7bd6d;
+  font-size: 12px;
+  margin-left: 10px;
+  letter-spacing: 2px;
+}
+
+.hero-copy {
+  max-width: 720px;
+  margin: 70px 0;
+}
+
+.eyebrow {
+  color: #b58a42;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+
+.hero-copy .eyebrow {
+  color: #f0d49d;
+}
+
+.hero-copy h1 {
+  margin: 22px 0;
+  color: white;
+  font-family: Georgia, serif;
+  font-size: clamp(38px, 5.2vw, 68px);
+  line-height: 1.08;
+  letter-spacing: -1.5px;
+}
+
+.hero-copy p {
+  max-width: 560px;
+  color: #fff4e8;
+  font-size: clamp(16px, 1.7vw, 20px);
+  line-height: 1.7;
+}
+
+.court-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.court {
+  padding: 10px 17px;
+  border: 1px solid #ffffff80;
+  border-radius: 30px;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  background: #30171970;
+  backdrop-filter: blur(5px);
+}
+
+.auth-wrap {
+  min-height: 100vh;
+  padding: 55px clamp(22px, 4vw, 58px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fffdf9;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.auth-card h2 {
+  margin: 17px 0 8px;
+  color: #742326;
+  font-family: Georgia, serif;
+  font-size: 34px;
+}
+
+.auth-card .muted {
+  color: #85776b;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 26px;
+}
+
+.switch {
+  display: flex;
+  gap: 8px;
+  padding: 5px;
+  margin-bottom: 24px;
+  border-radius: 11px;
+  background: #f4eee7;
+}
+
+.switch button {
+  flex: 1;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  color: #765c50;
+  background: transparent;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.switch button.selected {
+  color: white;
+  background: #81292c;
+  box-shadow: 0 3px 9px #42171925;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 17px;
+}
+
+.auth-card label {
+  display: grid;
+  gap: 8px;
+  color: #5b4640;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.auth-card input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #ded2c5;
+  border-radius: 9px;
+  outline: none;
+  background: white;
+  color: #382b29;
+  font-size: 15px;
+}
+
+.auth-card input:focus {
+  border-color: #a77b3d;
+  box-shadow: 0 0 0 3px #c5a36a20;
+}
+
+.auth-card input::placeholder {
+  color: #b2aaa2;
+}
+
+.auth-card button.primary {
+  min-height: 49px;
+  margin-top: 5px;
+  border: 0;
+  border-radius: 9px;
+  color: white;
+  background: linear-gradient(110deg, #8e292d, #641b20);
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 5px 13px #68212625;
+}
+
+.auth-card button.primary:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.auth-card .message {
+  padding: 12px;
+  border-radius: 8px;
+  color: #5c401e;
+  background: #fff3d9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-card .fine {
+  margin-top: 25px;
+  color: #91847a;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.auth-wrap footer {
+  max-width: 440px;
+  width: 100%;
+  margin: 35px auto 0;
+  color: #a18e7d;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+@media (max-width: 850px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    min-height: 440px;
+    padding: 28px 24px;
+  }
+
+  .hero-copy {
+    margin: 55px 0 35px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(36px, 8vw, 55px);
+  }
+
+  .auth-wrap {
+    min-height: auto;
+    padding: 45px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    min-height: 390px;
+    padding: 24px 20px;
+  }
+
+  .brand strong {
+    font-size: 27px;
+  }
+
+  .hero-copy {
+    margin: 42px 0 28px;
+  }
+
+  .hero-copy h1 {
+    font-size: 39px;
+  }
+
+  .auth-wrap {
+    padding: 38px 20px;
+  }
+
+  .auth-card h2 {
+    font-size: 30px;
+  }
+}
+
