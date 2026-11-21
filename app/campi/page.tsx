@@ -187,6 +187,24 @@ function CampiPageContent() {
         color: "#333",
       }}
     >
+      <button
+        onClick={() => {
+          window.location.href = "/dashboard";
+        }}
+        style={{
+          padding: "12px 18px",
+          marginBottom: 24,
+          border: "1px solid #e8dccb",
+          borderRadius: 10,
+          background: "white",
+          color: "#a52b2b",
+          fontSize: 16,
+          cursor: "pointer",
+        }}
+      >
+        ← Dashboard
+      </button>
+
       <h1 style={{ color: "#a52b2b" }}>Gestione campi</h1>
 
       <p>Happy Tennis Resort Manager · {resortNome}</p>
