@@ -1451,3 +1451,57 @@ body {
   }
 }
 
+/* ===== HAPPY TENNIS - SFONDO FOTOGRAFICO DASHBOARD ===== */
+
+.dashboard-welcome {
+  min-height: 330px;
+  padding: 35px 32px;
+  margin: 0 0 28px;
+  border-radius: 14px;
+  align-items: center;
+  color: white;
+  background:
+    linear-gradient(90deg, rgba(43, 13, 15, .88), rgba(43, 13, 15, .35)),
+    linear-gradient(0deg, rgba(43, 13, 15, .25), transparent),
+    url("/happy-tennis-cover.jpg") center 55% / cover no-repeat;
+  box-shadow: 0 8px 24px #4b24101c;
+}
+
+.dashboard-welcome .welcome-eyebrow {
+  color: #f1d49b;
+}
+
+.dashboard-welcome h1 {
+  color: white;
+}
+
+.dashboard-welcome p,
+.dashboard-welcome .welcome-email {
+  color: #fff4e8;
+}
+
+.resort-selector-box {
+  padding: 18px;
+  border: 1px solid #ffffff65;
+  border-radius: 12px;
+  background: rgba(45, 19, 19, .58);
+  backdrop-filter: blur(7px);
+}
+
+.resort-selector-box label {
+  color: #f1d49b;
+}
+
+@media (max-width: 650px) {
+  .dashboard-welcome {
+    min-height: 360px;
+    padding: 24px 19px;
+    border-radius: 12px;
+    background-position: center;
+  }
+
+  .resort-selector-box {
+    width: 100%;
+  }
+}
+
