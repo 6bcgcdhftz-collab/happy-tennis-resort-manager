@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,7 +9,7 @@ const moduli = [
   { nome: "Manutenzione", icona: "🔧", percorso: "/manutenzione", attivo: true },
   { nome: "Inventario", icona: "📦", attivo: false },
   { nome: "Manutenzione materiale", icona: "🛠️", attivo: false },
-  { nome: "Lezioni e maestri", icona: "🎓", attivo: false },
+  { nome: "Lezioni e maestri", icona: "🎓", percorso: "/lezioni", attivo: true },
   { nome: "Prenotazioni e affitti", icona: "📅", attivo: false },
   { nome: "Tornei", icona: "🏆", attivo: false },
   { nome: "Eventi", icona: "⭐", attivo: false },
