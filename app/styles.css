@@ -870,3 +870,59 @@ body {
   }
 }
 
+/* ===== ACCESSO COMPATTO SU IPHONE ===== */
+
+@media (max-width: 480px) {
+  .auth-wrap {
+    padding: 30px 20px 38px;
+  }
+
+  .auth-card h2 {
+    margin: 12px 0 6px;
+    font-size: 29px;
+  }
+
+  .auth-card .muted {
+    margin-bottom: 17px;
+    font-size: 13px;
+  }
+
+  .switch {
+    margin-bottom: 17px;
+    padding: 4px;
+  }
+
+  .switch button {
+    padding: 10px;
+  }
+
+  .auth-card form {
+    gap: 12px;
+  }
+
+  .auth-card label {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .auth-card input {
+    min-height: 45px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .auth-card button.primary {
+    min-height: 47px;
+    margin-top: 2px;
+  }
+
+  .auth-card .fine {
+    margin-top: 17px;
+  }
+
+  .auth-wrap footer {
+    margin-top: 24px;
+    line-height: 1.8;
+  }
+}
+
