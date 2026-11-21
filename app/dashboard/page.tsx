@@ -27,11 +27,14 @@ export default function Dashboard() {
   const [email, setEmail] = useState("");
   const [resorts, setResorts] = useState<ResortOption[]>([]);
   const [selectedResortId, setSelectedResortId] = useState("");
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   useEffect(() => {
     const run = async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (!user) {
         window.location.href = "/";
@@ -40,10 +43,19 @@ export default function Dashboard() {
 
       setEmail(user.email ?? "");
 
+      const { data: adminData } = await supabase
+        .from("platform_admins")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      setIsPlatformAdmin(!!adminData);
+
       const { data, error } = await supabase
         .from("resort_memberships")
         .select("resort_id, resorts(name)")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("is_active", true);
 
       if (error || !data || data.length === 0) {
         window.location.href = "/setup";
@@ -52,7 +64,9 @@ export default function Dashboard() {
 
       const options = data.map((item) => {
         const joined = item.resorts as unknown as
-          { name: string } | { name: string }[] | null;
+          | { name: string }
+          | { name: string }[]
+          | null;
 
         const resortData = Array.isArray(joined)
           ? joined[0]
@@ -105,7 +119,28 @@ export default function Dashboard() {
             <em>Resort Manager</em>
           </div>
         </div>
-        <button onClick={logout}>Esci</button>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {isPlatformAdmin && (
+            <button
+              onClick={() => {
+                window.location.href = "/admin";
+              }}
+              style={{
+                background: "#a52b2b",
+                color: "white",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 14px",
+                cursor: "pointer",
+              }}
+            >
+              Amministrazione generale
+            </button>
+          )}
+
+          <button onClick={logout}>Esci</button>
+        </div>
       </header>
 
       <section className="welcome">
