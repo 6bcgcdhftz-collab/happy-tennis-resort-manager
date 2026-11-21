@@ -1625,3 +1625,28 @@ main:has(> button[style]) button:disabled {
   }
 }
 
+/* Pulsante Dashboard sotto la fotografia nella pagina Manutenzione */
+
+main:has(> button[style]) {
+  display: flex;
+  flex-direction: column;
+}
+
+main:has(> button[style]) > h1 {
+  order: 1;
+}
+
+main:has(> button[style]) > p:first-of-type {
+  order: 2;
+}
+
+main:has(> button[style]) > button:first-child {
+  order: 3;
+  align-self: flex-start;
+  margin: 18px 24px 0 !important;
+}
+
+main:has(> button[style]) > section {
+  order: 4;
+}
+
