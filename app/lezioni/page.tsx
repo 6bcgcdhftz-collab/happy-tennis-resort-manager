@@ -84,7 +84,6 @@ function LezioniContent() {
   const [campoId, setCampoId] = useState("");
   const [partecipanti, setPartecipanti] = useState("");
 
-  // Stato del calendario grafico
   const [calendarioAperto, setCalendarioAperto] = useState(false);
   const [meseCalendario, setMeseCalendario] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -100,7 +99,9 @@ function LezioniContent() {
     setErrore("");
 
     const supabase = getSupabase();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       window.location.href = "/";
@@ -116,7 +117,7 @@ function LezioniContent() {
     if (membershipError || !memberships?.length) {
       setErrore(
         membershipError?.message ||
-        "Non risultano resort associati a questo account."
+          "Non risultano resort associati a questo account."
       );
       setLoading(false);
       return;
@@ -126,7 +127,9 @@ function LezioniContent() {
       ? memberships.find((item) => item.resort_id === resortRichiesto)
       : memberships.find((item) => {
           const joined = item.resorts as unknown as
-            { name: string } | { name: string }[] | null;
+            | { name: string }
+            | { name: string }[]
+            | null;
           const resort = Array.isArray(joined) ? joined[0] : joined;
           return resort?.name?.toLowerCase() === "mare e sole";
         }) ?? memberships[0];
@@ -138,7 +141,9 @@ function LezioniContent() {
     }
 
     const joined = membership.resorts as unknown as
-      { name: string } | { name: string }[] | null;
+      | { name: string }
+      | { name: string }[]
+      | null;
     const resort = Array.isArray(joined) ? joined[0] : joined;
 
     setResortId(membership.resort_id);
@@ -163,6 +168,7 @@ function LezioniContent() {
         .from("sport_courts")
         .select("id, name, sport")
         .eq("resort_id", membership.resort_id)
+        .eq("status", "active")
         .order("name"),
 
       supabase
@@ -174,13 +180,18 @@ function LezioniContent() {
         .order("lesson_date", { ascending: false }),
     ]);
 
-    if (staff.error || esterniData.error || campiData.error || lezioniData.error) {
+    if (
+      staff.error ||
+      esterniData.error ||
+      campiData.error ||
+      lezioniData.error
+    ) {
       setErrore(
         staff.error?.message ||
-        esterniData.error?.message ||
-        campiData.error?.message ||
-        lezioniData.error?.message ||
-        "Errore durante il caricamento."
+          esterniData.error?.message ||
+          campiData.error?.message ||
+          lezioniData.error?.message ||
+          "Errore durante il caricamento."
       );
       setLoading(false);
       return;
@@ -198,7 +209,7 @@ function LezioniContent() {
     if (profiliError) {
       setErrore(
         "Errore nel caricamento dei nomi dello staff: " +
-        profiliError.message
+          profiliError.message
       );
       setLoading(false);
       return;
@@ -223,7 +234,6 @@ function LezioniContent() {
     caricaDati();
   }, [resortRichiesto]);
 
-  // Cambia mese nel calendario
   function cambiaMese(differenza: number) {
     setMeseCalendario(
       new Date(
@@ -234,7 +244,6 @@ function LezioniContent() {
     );
   }
 
-  // Seleziona una data dal calendario
   function selezionaData(giorno: number) {
     const anno = meseCalendario.getFullYear();
     const mese = String(meseCalendario.getMonth() + 1).padStart(2, "0");
@@ -244,7 +253,6 @@ function LezioniContent() {
     setCalendarioAperto(false);
   }
 
-  // Seleziona la data odierna
   function selezionaOggi() {
     const oggi = new Date();
 
@@ -262,8 +270,16 @@ function LezioniContent() {
   }
 
   async function salvaLezione() {
-    if (!resortId || !titolo.trim() || !dataLezione || !oraLezione) {
-      setErrore("Inserisci titolo, data e ora della lezione.");
+    if (
+      !resortId ||
+      !titolo.trim() ||
+      !dataLezione ||
+      !oraLezione ||
+      !campoId
+    ) {
+      setErrore(
+        "Inserisci titolo, data, ora e campo della lezione."
+      );
       return;
     }
 
@@ -277,11 +293,21 @@ function LezioniContent() {
       !esternoId &&
       (!nomeEsterno.trim() || !cognomeEsterno.trim())
     ) {
-      setErrore("Seleziona un istruttore esterno o inserisci nome e cognome.");
+      setErrore(
+        "Seleziona un istruttore esterno o inserisci nome e cognome."
+      );
       return;
     }
 
-    if (Number(durata) <= 0 || Number(prezzo) < 0) {
+    const durataNumerica = Number(durata);
+    const prezzoNumerico = Number(prezzo);
+
+    if (
+      !Number.isFinite(durataNumerica) ||
+      durataNumerica <= 0 ||
+      !Number.isFinite(prezzoNumerico) ||
+      prezzoNumerico < 0
+    ) {
       setErrore("Controlla durata e prezzo della lezione.");
       return;
     }
@@ -291,6 +317,36 @@ function LezioniContent() {
     setMessaggio("");
 
     const supabase = getSupabase();
+
+    // Controllo preventivo della disponibilità del campo.
+    const { data: disponibile, error: disponibilitaError } =
+      await supabase.rpc("verifica_disponibilita_campo", {
+        p_resort_id: resortId,
+        p_court_id: campoId,
+        p_data: dataLezione,
+        p_ora: oraLezione,
+        p_durata: durataNumerica,
+      });
+
+    if (disponibilitaError) {
+      setErrore(
+        "Non è stato possibile verificare la disponibilità del campo: " +
+          disponibilitaError.message
+      );
+      setSalvando(false);
+      return;
+    }
+
+    if (disponibile !== true) {
+      setErrore(
+        "Il campo selezionato non è disponibile in questo orario. " +
+          "Potrebbe essere occupato, in manutenzione o non attivo. " +
+          "Scegli un altro campo o un altro orario."
+      );
+      setSalvando(false);
+      return;
+    }
+
     let idEsterno = esternoId || null;
 
     if (tipoIstruttore === "esterno" && !idEsterno) {
@@ -306,7 +362,8 @@ function LezioniContent() {
 
       if (error || !data) {
         setErrore(
-          "Errore nel salvataggio dell'istruttore: " + error?.message
+          "Errore nel salvataggio dell'istruttore: " +
+            (error?.message || "risposta non valida")
         );
         setSalvando(false);
         return;
@@ -323,20 +380,31 @@ function LezioniContent() {
           tipoIstruttore === "interno" ? istruttoreId : null,
         external_instructor_id:
           tipoIstruttore === "esterno" ? idEsterno : null,
-        court_id: campoId || null,
+        court_id: campoId,
         title: titolo.trim(),
         lesson_type: tipoLezione,
         lesson_date: dataLezione,
         start_time: oraLezione,
-        duration_minutes: Number(durata),
-        price: Number(prezzo),
+        duration_minutes: durataNumerica,
+        price: prezzoNumerico,
         status: "scheduled",
       })
       .select("id")
       .single();
 
     if (error || !nuovaLezione) {
-      setErrore("Errore nel salvataggio della lezione: " + error?.message);
+      if (error?.code === "23P01") {
+        setErrore(
+          "Il campo è stato prenotato da un'altra persona nello stesso orario. " +
+            "La lezione non è stata registrata. Scegli un altro orario o campo."
+        );
+      } else {
+        setErrore(
+          "Errore nel salvataggio della lezione: " +
+            (error?.message || "risposta non valida")
+        );
+      }
+
       setSalvando(false);
       return;
     }
@@ -349,6 +417,7 @@ function LezioniContent() {
     if (nomi.length > 0) {
       const righe = nomi.map((nome) => {
         const parti = nome.split(/\s+/);
+
         return {
           resort_id: resortId,
           lesson_id: nuovaLezione.id,
@@ -365,7 +434,7 @@ function LezioniContent() {
       if (partecipantiError) {
         setErrore(
           "Lezione salvata, ma errore nell'inserimento degli allievi: " +
-          partecipantiError.message
+            partecipantiError.message
         );
         setSalvando(false);
         await caricaDati();
@@ -420,7 +489,6 @@ function LezioniContent() {
     0
   ).getDate();
 
-  // Lunedì = prima colonna del calendario
   const spaziIniziali = (primoGiornoMese.getDay() + 6) % 7;
 
   const dataVisualizzata = dataLezione
@@ -593,14 +661,14 @@ function LezioniContent() {
             </>
           )}
 
-          <label style={labelStyle}>Campo (facoltativo)</label>
+          <label style={labelStyle}>Campo obbligatorio</label>
           <select
             style={inputStyle}
             value={campoId}
             onChange={(e) => setCampoId(e.target.value)}
             disabled={!isMaestro || salvando}
           >
-            <option value="">Nessun campo assegnato</option>
+            <option value="">Seleziona un campo disponibile</option>
             {campi.map((campo) => (
               <option key={campo.id} value={campo.id}>
                 {campo.name} · {campo.sport}
@@ -840,7 +908,7 @@ function LezioniContent() {
             onClick={salvaLezione}
             disabled={!isMaestro || salvando || loading}
           >
-            {salvando ? "Salvataggio in corso..." : "Registra lezione"}
+            {salvando ? "Verifica e salvataggio..." : "Registra lezione"}
           </button>
         </section>
 
@@ -866,8 +934,8 @@ function LezioniContent() {
                   {lezione.status === "completed"
                     ? "Completata"
                     : lezione.status === "cancelled"
-                    ? "Annullata"
-                    : "Programmata"}
+                      ? "Annullata"
+                      : "Programmata"}
                 </span>
               </div>
 
