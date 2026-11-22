@@ -20,6 +20,7 @@ type Campo = {
   id: string;
   name: string;
   sport: string;
+  status?: string;
 };
 
 type Lezione = {
@@ -116,8 +117,9 @@ function LezioniContent() {
 
     if (membershipError || !memberships?.length) {
       setErrore(
-        membershipError?.message ||
-          "Non risultano resort associati a questo account."
+        "ERRORE DI CARICAMENTO: " +
+          (membershipError?.message ||
+            "Non risultano resort associati a questo account.")
       );
       setLoading(false);
       return;
@@ -135,7 +137,7 @@ function LezioniContent() {
         }) ?? memberships[0];
 
     if (!membership) {
-      setErrore("Non hai accesso al resort selezionato.");
+      setErrore("ERRORE DI ACCESSO: non hai accesso al resort selezionato.");
       setLoading(false);
       return;
     }
@@ -166,7 +168,7 @@ function LezioniContent() {
 
       supabase
         .from("sport_courts")
-        .select("id, name, sport")
+        .select("id, name, sport, status")
         .eq("resort_id", membership.resort_id)
         .eq("status", "active")
         .order("name"),
@@ -187,11 +189,12 @@ function LezioniContent() {
       lezioniData.error
     ) {
       setErrore(
-        staff.error?.message ||
-          esterniData.error?.message ||
-          campiData.error?.message ||
-          lezioniData.error?.message ||
-          "Errore durante il caricamento."
+        "ERRORE DI CARICAMENTO: " +
+          (staff.error?.message ||
+            esterniData.error?.message ||
+            campiData.error?.message ||
+            lezioniData.error?.message ||
+            "Errore durante il caricamento.")
       );
       setLoading(false);
       return;
@@ -208,7 +211,7 @@ function LezioniContent() {
 
     if (profiliError) {
       setErrore(
-        "Errore nel caricamento dei nomi dello staff: " +
+        "ERRORE DI CARICAMENTO: nomi dello staff: " +
           profiliError.message
       );
       setLoading(false);
@@ -251,6 +254,7 @@ function LezioniContent() {
 
     setDataLezione(`${anno}-${mese}-${giornoFormattato}`);
     setCalendarioAperto(false);
+    setErrore("");
   }
 
   function selezionaOggi() {
@@ -267,24 +271,29 @@ function LezioniContent() {
       new Date(oggi.getFullYear(), oggi.getMonth(), 1)
     );
     setCalendarioAperto(false);
+    setErrore("");
   }
 
   async function salvaLezione() {
-    if (
-      !resortId ||
-      !titolo.trim() ||
-      !dataLezione ||
-      !oraLezione ||
-      !campoId
-    ) {
+    setErrore("");
+    setMessaggio("");
+
+    if (!campoId) {
       setErrore(
-        "Inserisci titolo, data, ora e campo della lezione."
+        "CAMPO OBBLIGATORIO: seleziona un campo prima di registrare la lezione."
+      );
+      return;
+    }
+
+    if (!resortId || !titolo.trim() || !dataLezione || !oraLezione) {
+      setErrore(
+        "DATI OBBLIGATORI MANCANTI: inserisci titolo, data e ora della lezione."
       );
       return;
     }
 
     if (tipoIstruttore === "interno" && !istruttoreId) {
-      setErrore("Seleziona un istruttore dello staff.");
+      setErrore("ISTRUTTORE MANCANTE: seleziona un istruttore dello staff.");
       return;
     }
 
@@ -294,7 +303,7 @@ function LezioniContent() {
       (!nomeEsterno.trim() || !cognomeEsterno.trim())
     ) {
       setErrore(
-        "Seleziona un istruttore esterno o inserisci nome e cognome."
+        "ISTRUTTORE ESTERNO MANCANTE: seleziona un istruttore esterno oppure inserisci nome e cognome."
       );
       return;
     }
@@ -308,151 +317,206 @@ function LezioniContent() {
       !Number.isFinite(prezzoNumerico) ||
       prezzoNumerico < 0
     ) {
-      setErrore("Controlla durata e prezzo della lezione.");
+      setErrore(
+        "DATI NON VALIDI: controlla la durata e il prezzo della lezione."
+      );
       return;
     }
 
     setSalvando(true);
-    setErrore("");
-    setMessaggio("");
 
-    const supabase = getSupabase();
+    try {
+      const supabase = getSupabase();
 
-    // Controllo preventivo della disponibilità del campo.
-    const { data: disponibile, error: disponibilitaError } =
-      await supabase.rpc("verifica_disponibilita_campo", {
-        p_resort_id: resortId,
-        p_court_id: campoId,
-        p_data: dataLezione,
-        p_ora: oraLezione,
-        p_durata: durataNumerica,
-      });
+      // Verifica preventiva della disponibilità del campo.
+      const { data: disponibile, error: disponibilitaError } =
+        await supabase.rpc("verifica_disponibilita_campo", {
+          p_resort_id: resortId,
+          p_court_id: campoId,
+          p_data: dataLezione,
+          p_ora: oraLezione,
+          p_durata: durataNumerica,
+        });
 
-    if (disponibilitaError) {
-      setErrore(
-        "Non è stato possibile verificare la disponibilità del campo: " +
-          disponibilitaError.message
-      );
-      setSalvando(false);
-      return;
-    }
+      if (disponibilitaError) {
+        setErrore(
+          "ERRORE DI VERIFICA: non è stato possibile controllare la disponibilità del campo. " +
+            disponibilitaError.message
+        );
+        return;
+      }
 
-    if (disponibile !== true) {
-      setErrore(
-        "Il campo selezionato non è disponibile in questo orario. " +
-          "Potrebbe essere occupato, in manutenzione o non attivo. " +
-          "Scegli un altro campo o un altro orario."
-      );
-      setSalvando(false);
-      return;
-    }
+      if (disponibile !== true) {
+        // Distingue un campo non attivo da un campo occupato.
+        const { data: campoControllato, error: campoError } = await supabase
+          .from("sport_courts")
+          .select("status")
+          .eq("id", campoId)
+          .eq("resort_id", resortId)
+          .maybeSingle();
 
-    let idEsterno = esternoId || null;
+        if (campoError) {
+          setErrore(
+            "ERRORE DI VERIFICA: impossibile determinare il motivo dell'indisponibilità. " +
+              campoError.message
+          );
+        } else if (!campoControllato || campoControllato.status !== "active") {
+          setErrore(
+            "CAMPO NON DISPONIBILE: il campo selezionato non è attivo oppure è in manutenzione. La lezione non è stata registrata. Scegli un altro campo."
+          );
+        } else {
+          setErrore(
+            "OVERBOOKING: il campo selezionato è già occupato nella fascia oraria richiesta. La lezione NON è stata registrata. Scegli un altro orario o un altro campo."
+          );
+        }
 
-    if (tipoIstruttore === "esterno" && !idEsterno) {
-      const { data, error } = await supabase
-        .from("lesson_instructors")
+        return;
+      }
+
+      let idEsterno = esternoId || null;
+
+      if (tipoIstruttore === "esterno" && !idEsterno) {
+        const { data, error } = await supabase
+          .from("lesson_instructors")
+          .insert({
+            resort_id: resortId,
+            first_name: nomeEsterno.trim(),
+            last_name: cognomeEsterno.trim(),
+          })
+          .select("id")
+          .single();
+
+        if (error || !data) {
+          setErrore(
+            "ERRORE DI SALVATAGGIO ISTRUTTORE: " +
+              (error?.message || "risposta non valida")
+          );
+          return;
+        }
+
+        idEsterno = data.id;
+      }
+
+      const { data: nuovaLezione, error } = await supabase
+        .from("sports_lessons")
         .insert({
           resort_id: resortId,
-          first_name: nomeEsterno.trim(),
-          last_name: cognomeEsterno.trim(),
+          instructor_user_id:
+            tipoIstruttore === "interno" ? istruttoreId : null,
+          external_instructor_id:
+            tipoIstruttore === "esterno" ? idEsterno : null,
+          court_id: campoId,
+          title: titolo.trim(),
+          lesson_type: tipoLezione,
+          lesson_date: dataLezione,
+          start_time: oraLezione,
+          duration_minutes: durataNumerica,
+          price: prezzoNumerico,
+          status: "scheduled",
         })
         .select("id")
         .single();
 
-      if (error || !data) {
-        setErrore(
-          "Errore nel salvataggio dell'istruttore: " +
-            (error?.message || "risposta non valida")
-        );
-        setSalvando(false);
+      if (error || !nuovaLezione) {
+        if (error?.code === "23P01") {
+          setErrore(
+            "OVERBOOKING: il campo è stato occupato da un'altra prenotazione nello stesso orario. La lezione NON è stata registrata. Scegli un altro orario o un altro campo."
+          );
+        } else {
+          setErrore(
+            "ERRORE DI SALVATAGGIO LEZIONE: " +
+              (error?.message || "risposta non valida")
+          );
+        }
+
         return;
       }
 
-      idEsterno = data.id;
-    }
+      const nomi = partecipanti
+        .split("\n")
+        .map((nome) => nome.trim())
+        .filter(Boolean);
 
-    const { data: nuovaLezione, error } = await supabase
-      .from("sports_lessons")
-      .insert({
-        resort_id: resortId,
-        instructor_user_id:
-          tipoIstruttore === "interno" ? istruttoreId : null,
-        external_instructor_id:
-          tipoIstruttore === "esterno" ? idEsterno : null,
-        court_id: campoId,
-        title: titolo.trim(),
-        lesson_type: tipoLezione,
-        lesson_date: dataLezione,
-        start_time: oraLezione,
-        duration_minutes: durataNumerica,
-        price: prezzoNumerico,
-        status: "scheduled",
-      })
-      .select("id")
-      .single();
+      if (nomi.length > 0) {
+        const righe = nomi.map((nome) => {
+          const parti = nome.split(/\s+/);
 
-    if (error || !nuovaLezione) {
-      if (error?.code === "23P01") {
-        setErrore(
-          "Il campo è stato prenotato da un'altra persona nello stesso orario. " +
-            "La lezione non è stata registrata. Scegli un altro orario o campo."
-        );
-      } else {
-        setErrore(
-          "Errore nel salvataggio della lezione: " +
-            (error?.message || "risposta non valida")
-        );
+          return {
+            resort_id: resortId,
+            lesson_id: nuovaLezione.id,
+            first_name: parti.shift() || "",
+            last_name: parti.join(" ") || "",
+            attendance: "expected",
+          };
+        });
+
+        const { error: partecipantiError } = await supabase
+          .from("sports_lesson_participants")
+          .insert(righe);
+
+        if (partecipantiError) {
+          setErrore(
+            "LEZIONE SALVATA, MA ERRORE ALLIEVI: la lezione è stata registrata, ma non è stato possibile inserire tutti gli allievi. " +
+              partecipantiError.message
+          );
+          await caricaDati();
+          return;
+        }
       }
 
+      setMessaggio("Lezione registrata correttamente!");
+      setTitolo("");
+      setPartecipanti("");
+      setCampoId("");
+      setPrezzo("0");
+      setEsternoId("");
+      setNomeEsterno("");
+      setCognomeEsterno("");
+
+      await caricaDati();
+    } catch (err) {
+      const dettaglio =
+        err instanceof Error ? err.message : "Errore imprevisto.";
+
+      setErrore(
+        "ERRORE IMPREVISTO: non è stato possibile completare la registrazione. " +
+          dettaglio
+      );
+    } finally {
       setSalvando(false);
-      return;
+    }
+  }
+
+  function titoloErrore(testo: string) {
+    if (testo.startsWith("OVERBOOKING")) {
+      return "⚠️ OVERBOOKING – CAMPO GIÀ OCCUPATO";
     }
 
-    const nomi = partecipanti
-      .split("\n")
-      .map((nome) => nome.trim())
-      .filter(Boolean);
-
-    if (nomi.length > 0) {
-      const righe = nomi.map((nome) => {
-        const parti = nome.split(/\s+/);
-
-        return {
-          resort_id: resortId,
-          lesson_id: nuovaLezione.id,
-          first_name: parti.shift() || "",
-          last_name: parti.join(" ") || "",
-          attendance: "expected",
-        };
-      });
-
-      const { error: partecipantiError } = await supabase
-        .from("sports_lesson_participants")
-        .insert(righe);
-
-      if (partecipantiError) {
-        setErrore(
-          "Lezione salvata, ma errore nell'inserimento degli allievi: " +
-            partecipantiError.message
-        );
-        setSalvando(false);
-        await caricaDati();
-        return;
-      }
+    if (testo.startsWith("CAMPO NON DISPONIBILE")) {
+      return "⚠️ CAMPO NON DISPONIBILE";
     }
 
-    setMessaggio("Lezione registrata correttamente!");
-    setTitolo("");
-    setPartecipanti("");
-    setCampoId("");
-    setPrezzo("0");
-    setEsternoId("");
-    setNomeEsterno("");
-    setCognomeEsterno("");
+    if (testo.startsWith("CAMPO OBBLIGATORIO")) {
+      return "⚠️ CAMPO OBBLIGATORIO";
+    }
 
-    await caricaDati();
-    setSalvando(false);
+    if (testo.startsWith("ISTRUTTORE")) {
+      return "⚠️ ISTRUTTORE NON SELEZIONATO";
+    }
+
+    if (testo.startsWith("DATI")) {
+      return "⚠️ CONTROLLA I DATI INSERITI";
+    }
+
+    if (testo.startsWith("LEZIONE SALVATA")) {
+      return "⚠️ ATTENZIONE: REGISTRAZIONE PARZIALE";
+    }
+
+    if (testo.startsWith("ERRORE DI CARICAMENTO")) {
+      return "⚠️ ERRORE DI CARICAMENTO";
+    }
+
+    return "⚠️ ERRORE – OPERAZIONE NON COMPLETATA";
   }
 
   function nomeIstruttore(lezione: Lezione) {
@@ -543,8 +607,52 @@ function LezioniContent() {
           <div className="courts-resort-name">{resortNome}</div>
         </div>
 
-        {errore && <div className="courts-error">{errore}</div>}
-        {messaggio && <div className="courts-message">{messaggio}</div>}
+        {errore && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            style={{
+              margin: "18px 0",
+              padding: 18,
+              border: "2px solid #c62828",
+              borderRadius: 12,
+              background: "#fff0f0",
+              color: "#8b1e1e",
+              fontSize: 15,
+              lineHeight: 1.6,
+              boxShadow: "0 4px 14px rgba(160, 30, 30, 0.08)",
+            }}
+          >
+            <strong
+              style={{
+                display: "block",
+                fontSize: 17,
+                marginBottom: 7,
+              }}
+            >
+              {titoloErrore(errore)}
+            </strong>
+            {errore}
+          </div>
+        )}
+
+        {messaggio && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              margin: "18px 0",
+              padding: 16,
+              border: "1px solid #39845a",
+              borderRadius: 12,
+              background: "#effaf2",
+              color: "#21643a",
+              fontWeight: 700,
+            }}
+          >
+            ✓ {messaggio}
+          </div>
+        )}
 
         {!isMaestro && !loading && (
           <div className="courts-message">
@@ -570,7 +678,10 @@ function LezioniContent() {
           <input
             style={inputStyle}
             value={titolo}
-            onChange={(e) => setTitolo(e.target.value)}
+            onChange={(e) => {
+              setTitolo(e.target.value);
+              setErrore("");
+            }}
             placeholder="Es. Lezione di tennis principianti"
             disabled={!isMaestro || salvando}
           />
@@ -594,6 +705,7 @@ function LezioniContent() {
               setTipoIstruttore(e.target.value);
               setIstruttoreId("");
               setEsternoId("");
+              setErrore("");
             }}
             disabled={!isMaestro || salvando}
           >
@@ -605,7 +717,10 @@ function LezioniContent() {
             <select
               style={inputStyle}
               value={istruttoreId}
-              onChange={(e) => setIstruttoreId(e.target.value)}
+              onChange={(e) => {
+                setIstruttoreId(e.target.value);
+                setErrore("");
+              }}
               disabled={!isMaestro || salvando}
             >
               <option value="">Seleziona un collaboratore</option>
@@ -627,6 +742,7 @@ function LezioniContent() {
                   setEsternoId(e.target.value);
                   setNomeEsterno("");
                   setCognomeEsterno("");
+                  setErrore("");
                 }}
                 disabled={!isMaestro || salvando}
               >
@@ -644,7 +760,10 @@ function LezioniContent() {
                   <input
                     style={inputStyle}
                     value={nomeEsterno}
-                    onChange={(e) => setNomeEsterno(e.target.value)}
+                    onChange={(e) => {
+                      setNomeEsterno(e.target.value);
+                      setErrore("");
+                    }}
                     placeholder="Nome"
                     disabled={!isMaestro || salvando}
                   />
@@ -652,7 +771,10 @@ function LezioniContent() {
                   <input
                     style={inputStyle}
                     value={cognomeEsterno}
-                    onChange={(e) => setCognomeEsterno(e.target.value)}
+                    onChange={(e) => {
+                      setCognomeEsterno(e.target.value);
+                      setErrore("");
+                    }}
                     placeholder="Cognome"
                     disabled={!isMaestro || salvando}
                   />
@@ -665,7 +787,10 @@ function LezioniContent() {
           <select
             style={inputStyle}
             value={campoId}
-            onChange={(e) => setCampoId(e.target.value)}
+            onChange={(e) => {
+              setCampoId(e.target.value);
+              setErrore("");
+            }}
             disabled={!isMaestro || salvando}
           >
             <option value="">Seleziona un campo disponibile</option>
