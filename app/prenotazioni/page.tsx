@@ -57,6 +57,7 @@ function PrenotazioniContent() {
   const [note, setNote] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [adesso, setAdesso] = useState(Date.now());
   const [salvando, setSalvando] = useState(false);
   const [errore, setErrore] = useState("");
   const [messaggio, setMessaggio] = useState("");
@@ -174,6 +175,14 @@ function PrenotazioniContent() {
   useEffect(() => {
     caricaDati();
   }, [resortRichiesto]);
+
+  useEffect(() => {
+    const intervallo = window.setInterval(() => {
+      setAdesso(Date.now());
+    }, 30000);
+
+    return () => window.clearInterval(intervallo);
+  }, []);
 
   async function salvaPrenotazione() {
     setErrore("");
@@ -316,9 +325,26 @@ function PrenotazioniContent() {
   ) {
     if (!isMaestro || !resortId) return;
 
+    const prenotazione = prenotazioni.find((item) => item.id === id);
+
+    if (!prenotazione || prenotazione.status !== "confirmed") {
+      setErrore("Questa prenotazione non è più modificabile.");
+      return;
+    }
+
+    if (
+      nuovoStato === "completed" &&
+      Date.now() < new Date(prenotazione.ends_at).getTime()
+    ) {
+      setErrore(
+        "Puoi segnare la prenotazione come completata soltanto dopo l'orario di fine."
+      );
+      return;
+    }
+
     const domanda =
       nuovoStato === "cancelled"
-        ? "Vuoi annullare questa prenotazione?"
+        ? "Vuoi annullare questa prenotazione? Il record resterà nello storico."
         : "Vuoi segnare questa prenotazione come completata?";
 
     if (!window.confirm(domanda)) return;
@@ -332,7 +358,8 @@ function PrenotazioniContent() {
       .from("court_bookings")
       .update({ status: nuovoStato })
       .eq("id", id)
-      .eq("resort_id", resortId);
+      .eq("resort_id", resortId)
+      .eq("status", "confirmed");
 
     if (error) {
       setErrore("Errore durante l'aggiornamento: " + error.message);
@@ -341,7 +368,7 @@ function PrenotazioniContent() {
 
     setMessaggio(
       nuovoStato === "cancelled"
-        ? "Prenotazione annullata."
+        ? "Prenotazione annullata. Il campo è stato liberato."
         : "Prenotazione completata."
     );
 
@@ -664,21 +691,24 @@ function PrenotazioniContent() {
                   prenotazione.status === "confirmed" && (
                     <div className="booking-actions">
                       <button
-                        className="booking-complete"
-                        onClick={() =>
-                          cambiaStato(prenotazione.id, "completed")
-                        }
-                      >
-                        Segna completata
-                      </button>
-                      <button
                         className="booking-cancel"
                         onClick={() =>
                           cambiaStato(prenotazione.id, "cancelled")
                         }
                       >
-                        Annulla
+                        Annulla prenotazione
                       </button>
+
+                      {adesso >= new Date(prenotazione.ends_at).getTime() && (
+                        <button
+                          className="booking-complete"
+                          onClick={() =>
+                            cambiaStato(prenotazione.id, "completed")
+                          }
+                        >
+                          Segna completata
+                        </button>
+                      )}
                     </div>
                   )}
               </article>
