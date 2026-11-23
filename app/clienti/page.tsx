@@ -438,13 +438,13 @@ function ClientiContent() {
                         <p className="clienti-error">{erroreStorico}</p>
                       )}
 
-                      {!erroreStorico && spostimentiCount(spostimentiCliente) === 0 && (
+                      {!erroreStorico && spostimentiCount(spostamentiCliente) === 0 && (
                         <p>Nessuno spostamento registrato per questo cliente.</p>
                       )}
 
-                      {!erroreStorico && spostimentiCount(spostimentiCliente) > 0 && (
+                      {!erroreStorico && spostimentiCount(spostamentiCliente) > 0 && (
                         <div className="clienti-records">
-                          {spostimentiCliente.map((item) => (
+                          {spostamentiCliente.map((item) => (
                             <article className="cliente-record spostamento" key={item.id}>
                               <strong>Prenotazione spostata</strong>
                               <p>
