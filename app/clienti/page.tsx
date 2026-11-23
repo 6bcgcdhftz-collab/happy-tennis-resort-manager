@@ -395,7 +395,7 @@ function ClientiContent() {
                       </div>
                       <div style={pannello}>
                         <span style={etichetta}>Spostamenti</span>
-                        <strong>{spostimentiCount(spostimentiCliente)}</strong>
+                        <strong>{spostimentiCount(spostamentiCliente)}</strong>
                       </div>
                       <div style={pannello}>
                         <span style={etichetta}>Totale completato</span>
