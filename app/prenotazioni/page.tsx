@@ -30,6 +30,20 @@ type Prenotazione = {
   notes: string | null;
 };
 
+type StoricoSpostamento = {
+  id: string;
+  booking_id: string;
+  customer_id: string;
+  old_court_id: string;
+  new_court_id: string;
+  old_starts_at: string;
+  old_ends_at: string;
+  new_starts_at: string;
+  new_ends_at: string;
+  actor_id: string | null;
+  moved_at: string;
+};
+
 function PrenotazioniContent() {
   const searchParams = useSearchParams();
   const resortRichiesto = searchParams.get("resort");
@@ -41,8 +55,11 @@ function PrenotazioniContent() {
   const [clienti, setClienti] = useState<Cliente[]>([]);
   const [campi, setCampi] = useState<Campo[]>([]);
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
+  const [storico, setStorico] = useState<StoricoSpostamento[]>([]);
 
-  const [modalitaCliente, setModalitaCliente] = useState<"esistente" | "nuovo">("esistente");
+  const [modalitaCliente, setModalitaCliente] =
+    useState<"esistente" | "nuovo">("esistente");
+
   const [clienteId, setClienteId] = useState("");
   const [nuovoNome, setNuovoNome] = useState("");
   const [nuovoCognome, setNuovoCognome] = useState("");
@@ -55,6 +72,15 @@ function PrenotazioniContent() {
   const [oraFine, setOraFine] = useState("10:00");
   const [prezzo, setPrezzo] = useState("0");
   const [note, setNote] = useState("");
+
+  // Stato dello spostamento
+  const [prenotazioneDaSpostare, setPrenotazioneDaSpostare] =
+    useState<string | null>(null);
+  const [nuovoCampoId, setNuovoCampoId] = useState("");
+  const [nuovaData, setNuovaData] = useState("");
+  const [nuovaOraInizio, setNuovaOraInizio] = useState("09:00");
+  const [nuovaOraFine, setNuovaOraFine] = useState("10:00");
+  const [spostando, setSpostando] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [adesso, setAdesso] = useState(Date.now());
@@ -121,40 +147,55 @@ function PrenotazioniContent() {
       setResortNome(resort?.name ?? "Resort");
       setIsMaestro(membership.role === "maestro_responsabile");
 
-      const [clientiData, campiData, prenotazioniData] =
-        await Promise.all([
-          supabase
-            .from("resort_customers")
-            .select("id, first_name, last_name, phone, email")
-            .eq("resort_id", membership.resort_id)
-            .order("last_name"),
+      const [
+        clientiData,
+        campiData,
+        prenotazioniData,
+        storicoData,
+      ] = await Promise.all([
+        supabase
+          .from("resort_customers")
+          .select("id, first_name, last_name, phone, email")
+          .eq("resort_id", membership.resort_id)
+          .order("last_name"),
 
-          supabase
-            .from("sport_courts")
-            .select("id, name, sport")
-            .eq("resort_id", membership.resort_id)
-            .eq("status", "active")
-            .order("name"),
+        supabase
+          .from("sport_courts")
+          .select("id, name, sport")
+          .eq("resort_id", membership.resort_id)
+          .eq("status", "active")
+          .order("name"),
 
-          supabase
-            .from("court_bookings")
-            .select(
-              "id, customer_id, court_id, starts_at, ends_at, price, status, notes"
-            )
-            .eq("resort_id", membership.resort_id)
-            .order("starts_at", { ascending: false }),
-        ]);
+        supabase
+          .from("court_bookings")
+          .select(
+            "id, customer_id, court_id, starts_at, ends_at, price, status, notes"
+          )
+          .eq("resort_id", membership.resort_id)
+          .order("starts_at", { ascending: false }),
+
+        supabase
+          .from("court_booking_history")
+          .select(
+            "id, booking_id, customer_id, old_court_id, new_court_id, old_starts_at, old_ends_at, new_starts_at, new_ends_at, actor_id, moved_at"
+          )
+          .eq("resort_id", membership.resort_id)
+          .order("moved_at", { ascending: false })
+          .limit(100),
+      ]);
 
       if (
         clientiData.error ||
         campiData.error ||
-        prenotazioniData.error
+        prenotazioniData.error ||
+        storicoData.error
       ) {
         setErrore(
           "Errore di caricamento: " +
             (clientiData.error?.message ||
               campiData.error?.message ||
-              prenotazioniData.error?.message)
+              prenotazioniData.error?.message ||
+              storicoData.error?.message)
         );
         setLoading(false);
         return;
@@ -163,6 +204,7 @@ function PrenotazioniContent() {
       setClienti(clientiData.data || []);
       setCampi(campiData.data || []);
       setPrenotazioni(prenotazioniData.data || []);
+      setStorico(storicoData.data || []);
     } catch (err) {
       setErrore(
         err instanceof Error ? err.message : "Errore imprevisto."
@@ -227,6 +269,11 @@ function PrenotazioniContent() {
       fine <= inizio
     ) {
       setErrore("Controlla la data e gli orari.");
+      return;
+    }
+
+    if (inizio <= new Date()) {
+      setErrore("La prenotazione deve iniziare nel futuro.");
       return;
     }
 
@@ -304,6 +351,7 @@ function PrenotazioniContent() {
       setNuovaEmail("");
       setModalitaCliente("esistente");
       setCampoId("");
+      setData("");
       setOraInizio("09:00");
       setOraFine("10:00");
       setPrezzo("0");
@@ -316,6 +364,169 @@ function PrenotazioniContent() {
       );
     } finally {
       setSalvando(false);
+    }
+  }
+
+  function dataPerInput(valore: string) {
+    const d = new Date(valore);
+
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+
+  function apriSpostamento(prenotazione: Prenotazione) {
+    setErrore("");
+    setMessaggio("");
+
+    setPrenotazioneDaSpostare(prenotazione.id);
+    setNuovoCampoId(prenotazione.court_id);
+    setNuovaData(dataPerInput(prenotazione.starts_at));
+    setNuovaOraInizio(oraInput(prenotazione.starts_at));
+    setNuovaOraFine(oraInput(prenotazione.ends_at));
+  }
+
+  function oraInput(valore: string) {
+    const d = new Date(valore);
+
+    return `${String(d.getHours()).padStart(2, "0")}:${String(
+      d.getMinutes()
+    ).padStart(2, "0")}`;
+  }
+
+  function chiudiSpostamento() {
+    setPrenotazioneDaSpostare(null);
+    setNuovoCampoId("");
+    setNuovaData("");
+    setNuovaOraInizio("09:00");
+    setNuovaOraFine("10:00");
+  }
+
+  async function spostaPrenotazione() {
+    setErrore("");
+    setMessaggio("");
+
+    if (!isMaestro || !resortId) {
+      setErrore("Non sei autorizzato a spostare prenotazioni.");
+      return;
+    }
+
+    if (
+      !prenotazioneDaSpostare ||
+      !nuovoCampoId ||
+      !nuovaData ||
+      !nuovaOraInizio ||
+      !nuovaOraFine
+    ) {
+      setErrore("Completa tutti i dati del nuovo appuntamento.");
+      return;
+    }
+
+    const prenotazione = prenotazioni.find(
+      (item) => item.id === prenotazioneDaSpostare
+    );
+
+    if (!prenotazione || prenotazione.status !== "confirmed") {
+      setErrore("La prenotazione non è più disponibile per lo spostamento.");
+      return;
+    }
+
+    if (Date.now() >= new Date(prenotazione.starts_at).getTime()) {
+      setErrore("Non puoi spostare una prenotazione già iniziata.");
+      return;
+    }
+
+    const nuovoInizio = new Date(
+      `${nuovaData}T${nuovaOraInizio}:00`
+    );
+    const nuovaFine = new Date(
+      `${nuovaData}T${nuovaOraFine}:00`
+    );
+
+    if (
+      Number.isNaN(nuovoInizio.getTime()) ||
+      Number.isNaN(nuovaFine.getTime()) ||
+      nuovoInizio <= new Date() ||
+      nuovaFine <= nuovoInizio
+    ) {
+      setErrore("La nuova data e gli orari non sono validi.");
+      return;
+    }
+
+    const nuovoCampo = campi.find(
+      (item) => item.id === nuovoCampoId
+    );
+
+    if (!nuovoCampo) {
+      setErrore("Seleziona un campo valido.");
+      return;
+    }
+
+    const conferma = window.confirm(
+      "Confermi lo spostamento della prenotazione?\n\n" +
+        "Da: " +
+        nomeCampo(prenotazione.court_id) +
+        " · " +
+        dataItaliana(prenotazione.starts_at) +
+        " · " +
+        oraItaliana(prenotazione.starts_at) +
+        "–" +
+        oraItaliana(prenotazione.ends_at) +
+        "\n\nA: " +
+        nuovoCampo.name +
+        " · " +
+        dataItaliana(nuovoInizio.toISOString()) +
+        " · " +
+        nuovaOraInizio +
+        "–" +
+        nuovaOraFine +
+        "\n\nIl vecchio orario sarà liberato e lo spostamento sarà registrato nello storico."
+    );
+
+    if (!conferma) return;
+
+    setSpostando(true);
+
+    try {
+      const supabase = getSupabase();
+
+      const { error } = await supabase.rpc("move_court_booking", {
+        p_booking_id: prenotazioneDaSpostare,
+        p_resort_id: resortId,
+        p_new_court_id: nuovoCampoId,
+        p_new_starts_at: nuovoInizio.toISOString(),
+        p_new_ends_at: nuovaFine.toISOString(),
+      });
+
+      if (error) {
+        if (error.code === "23P01") {
+          setErrore(
+            "Il nuovo campo è già occupato in questa fascia oraria. La prenotazione originale non è stata modificata."
+          );
+        } else {
+          setErrore(
+            "Impossibile spostare la prenotazione: " + error.message
+          );
+        }
+        return;
+      }
+
+      chiudiSpostamento();
+      setMessaggio(
+        "Prenotazione spostata correttamente. Il nuovo orario è stato registrato nello storico."
+      );
+
+      await caricaDati();
+    } catch (err) {
+      setErrore(
+        err instanceof Error
+          ? err.message
+          : "Errore durante lo spostamento."
+      );
+    } finally {
+      setSpostando(false);
     }
   }
 
@@ -383,8 +594,10 @@ function PrenotazioniContent() {
   }
 
   function nomeCampo(id: string) {
-    return campi.find((item) => item.id === id)?.name ||
-      "Campo non disponibile";
+    return (
+      campi.find((item) => item.id === id)?.name ||
+      "Campo non disponibile"
+    );
   }
 
   function dataItaliana(valore: string) {
@@ -435,7 +648,9 @@ function PrenotazioniContent() {
             type="button"
             className="booking-back-button"
             onClick={() => {
-              window.location.href = `/dashboard?resort=${encodeURIComponent(resortId)}`;
+              window.location.href = `/dashboard?resort=${encodeURIComponent(
+                resortId
+              )}`;
             }}
           >
             ← Torna alla dashboard
@@ -456,6 +671,11 @@ function PrenotazioniContent() {
             <span>Campi attivi</span>
           </div>
         </section>
+
+        {errore && <p className="booking-error">{errore}</p>}
+        {messaggio && (
+          <p className="booking-success">{messaggio}</p>
+        )}
 
         {isMaestro && (
           <section className="booking-panel">
@@ -616,11 +836,6 @@ function PrenotazioniContent() {
               placeholder="Eventuali informazioni aggiuntive..."
             />
 
-            {errore && <p className="booking-error">{errore}</p>}
-            {messaggio && (
-              <p className="booking-success">{messaggio}</p>
-            )}
-
             <button
               className="booking-submit"
               onClick={salvaPrenotazione}
@@ -672,9 +887,7 @@ function PrenotazioniContent() {
                 </div>
 
                 <p>🎾 {nomeCampo(prenotazione.court_id)}</p>
-                <p>
-                  📅 {dataItaliana(prenotazione.starts_at)}
-                </p>
+                <p>📅 {dataItaliana(prenotazione.starts_at)}</p>
                 <p>
                   🕒 {oraItaliana(prenotazione.starts_at)} –{" "}
                   {oraItaliana(prenotazione.ends_at)}
@@ -690,6 +903,16 @@ function PrenotazioniContent() {
                 {isMaestro &&
                   prenotazione.status === "confirmed" && (
                     <div className="booking-actions">
+                      {adesso <
+                        new Date(prenotazione.starts_at).getTime() && (
+                        <button
+                          className="booking-move"
+                          onClick={() => apriSpostamento(prenotazione)}
+                        >
+                          ↔ Sposta prenotazione
+                        </button>
+                      )}
+
                       <button
                         className="booking-cancel"
                         onClick={() =>
@@ -699,7 +922,8 @@ function PrenotazioniContent() {
                         Annulla prenotazione
                       </button>
 
-                      {adesso >= new Date(prenotazione.ends_at).getTime() && (
+                      {adesso >=
+                        new Date(prenotazione.ends_at).getTime() && (
                         <button
                           className="booking-complete"
                           onClick={() =>
@@ -711,6 +935,132 @@ function PrenotazioniContent() {
                       )}
                     </div>
                   )}
+
+                {prenotazioneDaSpostare === prenotazione.id && (
+                  <div className="booking-move-panel">
+                    <h3>Sposta prenotazione</h3>
+
+                    <p className="booking-hint">
+                      Cliente: {nomeCliente(prenotazione.customer_id)}
+                    </p>
+
+                    <label className="booking-label">Nuovo campo</label>
+                    <select
+                      className="booking-input"
+                      value={nuovoCampoId}
+                      onChange={(e) => setNuovoCampoId(e.target.value)}
+                    >
+                      <option value="">Seleziona il nuovo campo</option>
+                      {campi.map((campo) => (
+                        <option key={campo.id} value={campo.id}>
+                          {campo.name} · {campo.sport}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label className="booking-label">Nuova data</label>
+                    <input
+                      className="booking-input"
+                      type="date"
+                      value={nuovaData}
+                      min={dataOggi}
+                      onChange={(e) => setNuovaData(e.target.value)}
+                    />
+
+                    <label className="booking-label">Nuova ora inizio</label>
+                    <input
+                      className="booking-input"
+                      type="time"
+                      value={nuovaOraInizio}
+                      onChange={(e) => setNuovaOraInizio(e.target.value)}
+                    />
+
+                    <label className="booking-label">Nuova ora fine</label>
+                    <input
+                      className="booking-input"
+                      type="time"
+                      value={nuovaOraFine}
+                      onChange={(e) => setNuovaOraFine(e.target.value)}
+                    />
+
+                    <div className="booking-move-actions">
+                      <button
+                        className="booking-submit"
+                        onClick={spostaPrenotazione}
+                        disabled={spostando}
+                      >
+                        {spostando
+                          ? "Spostamento in corso..."
+                          : "Conferma spostamento"}
+                      </button>
+
+                      <button
+                        className="booking-close"
+                        onClick={chiudiSpostamento}
+                        disabled={spostando}
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            ))}
+        </section>
+
+        <section className="booking-panel">
+          <div className="booking-list-heading">
+            <h2>Storico spostamenti</h2>
+            <span className="booking-history-count">
+              {storico.length} registrazioni
+            </span>
+          </div>
+
+          {loading && <p>Caricamento storico...</p>}
+
+          {!loading && storico.length === 0 && (
+            <p className="booking-hint">
+              Non sono ancora presenti spostamenti.
+              Le modifiche future saranno registrate qui.
+            </p>
+          )}
+
+          {!loading &&
+            storico.map((movimento) => (
+              <article className="booking-history-card" key={movimento.id}>
+                <div className="booking-card-heading">
+                  <strong>{nomeCliente(movimento.customer_id)}</strong>
+                  <span className="booking-history-date">
+                    {dataItaliana(movimento.moved_at)} ·{" "}
+                    {oraItaliana(movimento.moved_at)}
+                  </span>
+                </div>
+
+                <div className="booking-history-block">
+                  <span>PRENOTAZIONE ORIGINALE</span>
+                  <p>🎾 {nomeCampo(movimento.old_court_id)}</p>
+                  <p>
+                    📅 {dataItaliana(movimento.old_starts_at)}
+                  </p>
+                  <p>
+                    🕒 {oraItaliana(movimento.old_starts_at)} –{" "}
+                    {oraItaliana(movimento.old_ends_at)}
+                  </p>
+                </div>
+
+                <div className="booking-history-arrow">↓</div>
+
+                <div className="booking-history-block new">
+                  <span>NUOVA PRENOTAZIONE</span>
+                  <p>🎾 {nomeCampo(movimento.new_court_id)}</p>
+                  <p>
+                    📅 {dataItaliana(movimento.new_starts_at)}
+                  </p>
+                  <p>
+                    🕒 {oraItaliana(movimento.new_starts_at)} –{" "}
+                    {oraItaliana(movimento.new_ends_at)}
+                  </p>
+                </div>
               </article>
             ))}
         </section>
@@ -776,10 +1126,6 @@ function PrenotazioniContent() {
           font-size: 14px;
           font-weight: 700;
           cursor: pointer;
-        }
-
-        .booking-back-button:active {
-          opacity: 0.8;
         }
 
         .booking-stats {
@@ -911,6 +1257,7 @@ function PrenotazioniContent() {
           border-radius: 8px;
           font-size: 13px;
           line-height: 1.5;
+          margin-bottom: 15px;
         }
 
         .booking-error {
@@ -957,6 +1304,7 @@ function PrenotazioniContent() {
           color: #742326;
           background: white;
           font-weight: 700;
+          cursor: pointer;
         }
 
         .booking-card {
@@ -1027,12 +1375,98 @@ function PrenotazioniContent() {
           cursor: pointer;
         }
 
+        .booking-move {
+          background: #315b78;
+        }
+
         .booking-complete {
           background: #397348;
         }
 
         .booking-cancel {
           background: #9a3430;
+        }
+
+        .booking-move-panel {
+          margin-top: 16px;
+          padding: 15px;
+          border: 1px solid #d9c5a7;
+          border-radius: 10px;
+          background: #fff9ef;
+        }
+
+        .booking-move-panel h3 {
+          margin: 0 0 10px;
+          color: #742326;
+          font-size: 19px;
+          font-family: Georgia, serif;
+        }
+
+        .booking-move-actions {
+          display: grid;
+          gap: 8px;
+        }
+
+        .booking-close {
+          width: 100%;
+          min-height: 45px;
+          border: 1px solid #dfd1c1;
+          border-radius: 9px;
+          background: white;
+          color: #742326;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .booking-history-count {
+          color: #85776b;
+          font-size: 12px;
+        }
+
+        .booking-history-card {
+          padding: 15px;
+          margin-top: 13px;
+          border: 1px solid #eadfce;
+          border-radius: 11px;
+          background: #fffdf9;
+          overflow-wrap: anywhere;
+        }
+
+        .booking-history-date {
+          color: #85776b;
+          font-size: 11px;
+        }
+
+        .booking-history-block {
+          margin-top: 14px;
+          padding: 12px;
+          border-radius: 8px;
+          background: #f5eee8;
+        }
+
+        .booking-history-block.new {
+          background: #edf5ed;
+        }
+
+        .booking-history-block span {
+          color: #8b6a4d;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 1px;
+        }
+
+        .booking-history-block p {
+          margin: 7px 0 0;
+          color: #51443b;
+          font-size: 13px;
+        }
+
+        .booking-history-arrow {
+          text-align: center;
+          padding: 7px;
+          color: #81292c;
+          font-size: 20px;
+          font-weight: bold;
         }
 
         .booking-footer {
