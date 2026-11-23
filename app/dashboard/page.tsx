@@ -6,6 +6,7 @@ import { getSupabase } from "@/lib/supabase";
 
 const moduli = [
   { nome: "Gestione campi", icona: "🎾", percorso: "/campi", attivo: true },
+  { nome: "Calendario campi", icona: "🗓️", percorso: "/calendario", attivo: true },
   { nome: "Manutenzione", icona: "🔧", percorso: "/manutenzione", attivo: true },
   { nome: "Inventario", icona: "📦", attivo: false },
   { nome: "Manutenzione materiale", icona: "🛠️", attivo: false },
