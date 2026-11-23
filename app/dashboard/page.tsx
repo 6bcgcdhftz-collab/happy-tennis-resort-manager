@@ -11,7 +11,7 @@ const moduli = [
   { nome: "Inventario", icona: "📦", attivo: false },
   { nome: "Manutenzione materiale", icona: "🛠️", attivo: false },
   { nome: "Lezioni e maestri", icona: "🎓", percorso: "/lezioni", attivo: true },
-  { nome: "Prenotazioni e affitti", icona: "📅", attivo: false },
+  { nome: "Prenotazioni e affitti", icona: "📅", percorso: "/prenotazioni", attivo: true },
   { nome: "Tornei", icona: "🏆", attivo: false },
   { nome: "Eventi", icona: "⭐", attivo: false },
   { nome: "Contabilità", icona: "💶", attivo: false },
