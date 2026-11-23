@@ -17,7 +17,6 @@ type Campo = {
   id: string;
   name: string;
   sport: string;
-  status: string;
 };
 
 type Prenotazione = {
@@ -29,25 +28,6 @@ type Prenotazione = {
   price: number;
   status: "confirmed" | "cancelled" | "completed";
   notes: string | null;
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: 13,
-  marginTop: 7,
-  border: "1px solid #dfd1c1",
-  borderRadius: 9,
-  background: "white",
-  color: "#302b29",
-  fontSize: 15,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  marginTop: 15,
-  color: "#604c42",
-  fontSize: 13,
-  fontWeight: 700,
 };
 
 function PrenotazioniContent() {
@@ -62,7 +42,13 @@ function PrenotazioniContent() {
   const [campi, setCampi] = useState<Campo[]>([]);
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
 
+  const [modalitaCliente, setModalitaCliente] = useState<"esistente" | "nuovo">("esistente");
   const [clienteId, setClienteId] = useState("");
+  const [nuovoNome, setNuovoNome] = useState("");
+  const [nuovoCognome, setNuovoCognome] = useState("");
+  const [nuovoTelefono, setNuovoTelefono] = useState("");
+  const [nuovaEmail, setNuovaEmail] = useState("");
+
   const [campoId, setCampoId] = useState("");
   const [data, setData] = useState("");
   const [oraInizio, setOraInizio] = useState("09:00");
@@ -108,9 +94,7 @@ function PrenotazioniContent() {
       }
 
       const membership = resortRichiesto
-        ? memberships.find(
-            (item) => item.resort_id === resortRichiesto
-          )
+        ? memberships.find((item) => item.resort_id === resortRichiesto)
         : memberships.find((item) => {
             const joined = item.resorts as unknown as
               | { name: string }
@@ -146,7 +130,7 @@ function PrenotazioniContent() {
 
           supabase
             .from("sport_courts")
-            .select("id, name, sport, status")
+            .select("id, name, sport")
             .eq("resort_id", membership.resort_id)
             .eq("status", "active")
             .order("name"),
@@ -195,17 +179,26 @@ function PrenotazioniContent() {
     setErrore("");
     setMessaggio("");
 
-    if (!resortId || !clienteId || !campoId || !data) {
-      setErrore(
-        "DATI MANCANTI: seleziona cliente, campo e data."
-      );
+    if (!resortId || !campoId || !data) {
+      setErrore("Seleziona un campo e inserisci la data.");
+      return;
+    }
+
+    if (modalitaCliente === "esistente" && !clienteId) {
+      setErrore("Seleziona un cliente dall'elenco.");
+      return;
+    }
+
+    if (
+      modalitaCliente === "nuovo" &&
+      (!nuovoNome.trim() || !nuovoCognome.trim())
+    ) {
+      setErrore("Inserisci nome e cognome del nuovo cliente.");
       return;
     }
 
     if (!oraInizio || !oraFine || oraFine <= oraInizio) {
-      setErrore(
-        "ORARIO NON VALIDO: l'ora di fine deve essere successiva all'inizio."
-      );
+      setErrore("L'ora di fine deve essere successiva all'ora di inizio.");
       return;
     }
 
@@ -224,7 +217,7 @@ function PrenotazioniContent() {
       Number.isNaN(fine.getTime()) ||
       fine <= inizio
     ) {
-      setErrore("Controlla la data e gli orari inseriti.");
+      setErrore("Controlla la data e gli orari.");
       return;
     }
 
@@ -242,11 +235,38 @@ function PrenotazioniContent() {
         return;
       }
 
+      let customerId = clienteId;
+
+      if (modalitaCliente === "nuovo") {
+        const { data: nuovoCliente, error: erroreCliente } =
+          await supabase
+            .from("resort_customers")
+            .insert({
+              resort_id: resortId,
+              first_name: nuovoNome.trim(),
+              last_name: nuovoCognome.trim(),
+              phone: nuovoTelefono.trim() || null,
+              email: nuovaEmail.trim() || null,
+            })
+            .select("id")
+            .single();
+
+        if (erroreCliente || !nuovoCliente) {
+          setErrore(
+            "Errore nel salvataggio del cliente: " +
+              (erroreCliente?.message || "risposta non valida")
+          );
+          return;
+        }
+
+        customerId = nuovoCliente.id;
+      }
+
       const { error } = await supabase
         .from("court_bookings")
         .insert({
           resort_id: resortId,
-          customer_id: clienteId,
+          customer_id: customerId,
           court_id: campoId,
           starts_at: inizio.toISOString(),
           ends_at: fine.toISOString(),
@@ -259,18 +279,21 @@ function PrenotazioniContent() {
       if (error) {
         if (error.code === "23P01") {
           setErrore(
-            "OVERBOOKING: il campo è già occupato in questa fascia oraria. Scegli un altro orario o un altro campo."
+            "Il campo è già occupato in questa fascia oraria. Scegli un altro orario o campo."
           );
         } else {
-          setErrore(
-            "Errore durante la prenotazione: " + error.message
-          );
+          setErrore("Errore di prenotazione: " + error.message);
         }
         return;
       }
 
       setMessaggio("Prenotazione registrata correttamente!");
       setClienteId("");
+      setNuovoNome("");
+      setNuovoCognome("");
+      setNuovoTelefono("");
+      setNuovaEmail("");
+      setModalitaCliente("esistente");
       setCampoId("");
       setOraInizio("09:00");
       setOraFine("10:00");
@@ -288,17 +311,17 @@ function PrenotazioniContent() {
   }
 
   async function cambiaStato(
-    prenotazioneId: string,
+    id: string,
     nuovoStato: "cancelled" | "completed"
   ) {
     if (!isMaestro || !resortId) return;
 
-    const conferma =
+    const domanda =
       nuovoStato === "cancelled"
         ? "Vuoi annullare questa prenotazione?"
         : "Vuoi segnare questa prenotazione come completata?";
 
-    if (!window.confirm(conferma)) return;
+    if (!window.confirm(domanda)) return;
 
     setErrore("");
     setMessaggio("");
@@ -308,7 +331,7 @@ function PrenotazioniContent() {
     const { error } = await supabase
       .from("court_bookings")
       .update({ status: nuovoStato })
-      .eq("id", prenotazioneId)
+      .eq("id", id)
       .eq("resort_id", resortId);
 
     if (error) {
@@ -333,13 +356,11 @@ function PrenotazioniContent() {
   }
 
   function nomeCampo(id: string) {
-    return (
-      campi.find((item) => item.id === id)?.name ||
-      "Campo non disponibile"
-    );
+    return campi.find((item) => item.id === id)?.name ||
+      "Campo non disponibile";
   }
 
-  function formattaData(valore: string) {
+  function dataItaliana(valore: string) {
     return new Date(valore).toLocaleDateString("it-IT", {
       day: "2-digit",
       month: "2-digit",
@@ -347,7 +368,7 @@ function PrenotazioniContent() {
     });
   }
 
-  function formattaOra(valore: string) {
+  function oraItaliana(valore: string) {
     return new Date(valore).toLocaleTimeString("it-IT", {
       hour: "2-digit",
       minute: "2-digit",
@@ -373,98 +394,137 @@ function PrenotazioniContent() {
   );
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: "25px clamp(14px, 4vw, 45px)",
-        background: "#faf7f2",
-        color: "#302b29",
-      }}
-    >
-      <div style={{ maxWidth: 1150, margin: "0 auto" }}>
-        <header
-          style={{
-            padding: "25px",
-            borderRadius: 15,
-            color: "white",
-            background: "linear-gradient(120deg, #741d20, #451316)",
-            marginBottom: 25,
-          }}
-        >
-          <div style={{ fontSize: 30 }}>📅</div>
-          <div
-            style={{
-              color: "#e8c88c",
-              fontSize: 11,
-              letterSpacing: 2,
-              marginTop: 8,
-            }}
-          >
+    <main className="booking-page">
+      <div className="booking-container">
+        <header className="booking-header">
+          <div className="booking-ball">🎾</div>
+          <div className="booking-eyebrow">
             HAPPY TENNIS RESORT MANAGER
           </div>
-          <h1
-            style={{
-              font: "bold 32px Georgia, serif",
-              margin: "10px 0",
-            }}
-          >
-            Prenotazioni campi
-          </h1>
-          <p style={{ margin: 0, color: "#f1ded5" }}>
-            Gestione delle prenotazioni · {resortNome}
-          </p>
+          <h1>Prenotazioni campi</h1>
+          <p>Gestione prenotazioni · {resortNome}</p>
         </header>
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
-            gap: 12,
-            marginBottom: 25,
-          }}
-        >
-          <div style={statStyle}>
-            <strong style={statNumberStyle}>{prenotazioni.length}</strong>
-            <span style={statLabelStyle}>Prenotazioni totali</span>
+        <section className="booking-stats">
+          <div className="booking-stat">
+            <strong>{prenotazioni.length}</strong>
+            <span>Prenotazioni totali</span>
           </div>
-          <div style={statStyle}>
-            <strong style={statNumberStyle}>{attive.length}</strong>
-            <span style={statLabelStyle}>Confermate</span>
+          <div className="booking-stat">
+            <strong>{attive.length}</strong>
+            <span>Confermate</span>
           </div>
-          <div style={statStyle}>
-            <strong style={statNumberStyle}>{campi.length}</strong>
-            <span style={statLabelStyle}>Campi attivi</span>
+          <div className="booking-stat">
+            <strong>{campi.length}</strong>
+            <span>Campi attivi</span>
           </div>
         </section>
 
         {isMaestro && (
-          <section style={panelStyle}>
-            <h2 style={headingStyle}>＋ Nuova prenotazione</h2>
+          <section className="booking-panel">
+            <h2>＋ Nuova prenotazione</h2>
 
-            <label style={labelStyle}>Cliente</label>
-            <select
-              style={inputStyle}
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-            >
-              <option value="">Seleziona un cliente</option>
-              {clienti.map((cliente) => (
-                <option key={cliente.id} value={cliente.id}>
-                  {cliente.first_name} {cliente.last_name}
-                  {cliente.phone ? ` · ${cliente.phone}` : ""}
-                </option>
-              ))}
-            </select>
+            <label className="booking-label">Cliente</label>
 
-            {clienti.length === 0 && (
-              <p style={hintStyle}>
-                Non ci sono ancora clienti registrati in questo resort.
-              </p>
+            <div className="booking-mode-switch">
+              <button
+                type="button"
+                className={
+                  modalitaCliente === "esistente"
+                    ? "booking-mode active"
+                    : "booking-mode"
+                }
+                onClick={() => {
+                  setModalitaCliente("esistente");
+                  setErrore("");
+                }}
+              >
+                Scegli esistente
+              </button>
+              <button
+                type="button"
+                className={
+                  modalitaCliente === "nuovo"
+                    ? "booking-mode active"
+                    : "booking-mode"
+                }
+                onClick={() => {
+                  setModalitaCliente("nuovo");
+                  setClienteId("");
+                  setErrore("");
+                }}
+              >
+                ＋ Nuovo cliente
+              </button>
+            </div>
+
+            {modalitaCliente === "esistente" ? (
+              <>
+                <select
+                  className="booking-input"
+                  value={clienteId}
+                  onChange={(e) => setClienteId(e.target.value)}
+                >
+                  <option value="">Seleziona un cliente</option>
+                  {clienti.map((cliente) => (
+                    <option key={cliente.id} value={cliente.id}>
+                      {cliente.first_name} {cliente.last_name}
+                      {cliente.phone ? ` · ${cliente.phone}` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                {clienti.length === 0 && (
+                  <p className="booking-hint">
+                    Non ci sono clienti registrati. Puoi inserirne uno nuovo.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="booking-new-customer">
+                <label className="booking-label">Nome *</label>
+                <input
+                  className="booking-input"
+                  value={nuovoNome}
+                  onChange={(e) => setNuovoNome(e.target.value)}
+                  placeholder="Nome"
+                />
+
+                <label className="booking-label">Cognome *</label>
+                <input
+                  className="booking-input"
+                  value={nuovoCognome}
+                  onChange={(e) => setNuovoCognome(e.target.value)}
+                  placeholder="Cognome"
+                />
+
+                <label className="booking-label">Telefono</label>
+                <input
+                  className="booking-input"
+                  type="tel"
+                  value={nuovoTelefono}
+                  onChange={(e) => setNuovoTelefono(e.target.value)}
+                  placeholder="Numero di telefono"
+                />
+
+                <label className="booking-label">Email</label>
+                <input
+                  className="booking-input"
+                  type="email"
+                  value={nuovaEmail}
+                  onChange={(e) => setNuovaEmail(e.target.value)}
+                  placeholder="Indirizzo email"
+                />
+
+                <p className="booking-hint">
+                  Il nuovo cliente verrà salvato nell'anagrafica del resort.
+                </p>
+              </div>
             )}
 
-            <label style={labelStyle}>Campo sportivo</label>
+            <label className="booking-label">Campo sportivo</label>
             <select
-              style={inputStyle}
+              className="booking-input"
               value={campoId}
               onChange={(e) => setCampoId(e.target.value)}
             >
@@ -476,104 +536,79 @@ function PrenotazioniContent() {
               ))}
             </select>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <div>
-                <label style={labelStyle}>Data</label>
-                <input
-                  type="date"
-                  style={inputStyle}
-                  value={data}
-                  min={dataOggi}
-                  onChange={(e) => setData(e.target.value)}
-                />
-              </div>
+            <label className="booking-label">Data</label>
+            <input
+              className="booking-input"
+              type="date"
+              value={data}
+              min={dataOggi}
+              onChange={(e) => setData(e.target.value)}
+            />
 
-              <div>
-                <label style={labelStyle}>Ora inizio</label>
-                <input
-                  type="time"
-                  style={inputStyle}
-                  value={oraInizio}
-                  onChange={(e) => setOraInizio(e.target.value)}
-                />
-              </div>
+            <label className="booking-label">Ora inizio</label>
+            <input
+              className="booking-input"
+              type="time"
+              value={oraInizio}
+              onChange={(e) => setOraInizio(e.target.value)}
+            />
 
-              <div>
-                <label style={labelStyle}>Ora fine</label>
-                <input
-                  type="time"
-                  style={inputStyle}
-                  value={oraFine}
-                  onChange={(e) => setOraFine(e.target.value)}
-                />
-              </div>
+            <label className="booking-label">Ora fine</label>
+            <input
+              className="booking-input"
+              type="time"
+              value={oraFine}
+              onChange={(e) => setOraFine(e.target.value)}
+            />
 
-              <div>
-                <label style={labelStyle}>Prezzo (€)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  style={inputStyle}
-                  value={prezzo}
-                  onChange={(e) => setPrezzo(e.target.value)}
-                />
-              </div>
-            </div>
+            <label className="booking-label">Prezzo (€)</label>
+            <input
+              className="booking-input"
+              type="number"
+              min="0"
+              step="0.01"
+              value={prezzo}
+              onChange={(e) => setPrezzo(e.target.value)}
+            />
 
-            <label style={labelStyle}>Note</label>
+            <label className="booking-label">Note</label>
             <textarea
-              style={{ ...inputStyle, minHeight: 85, resize: "vertical" }}
+              className="booking-input booking-notes"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Eventuali informazioni aggiuntive..."
             />
 
-            {errore && (
-              <p style={errorStyle}>{errore}</p>
-            )}
-
+            {errore && <p className="booking-error">{errore}</p>}
             {messaggio && (
-              <p style={successStyle}>{messaggio}</p>
+              <p className="booking-success">{messaggio}</p>
             )}
 
             <button
+              className="booking-submit"
               onClick={salvaPrenotazione}
-              disabled={salvando || clienti.length === 0 || campi.length === 0}
-              style={primaryButtonStyle}
+              disabled={salvando || campi.length === 0}
             >
-              {salvando ? "Registrazione in corso..." : "Registra prenotazione"}
+              {salvando
+                ? "Registrazione in corso..."
+                : "Registra prenotazione"}
             </button>
           </section>
         )}
 
         {!isMaestro && (
-          <p style={hintStyle}>
+          <p className="booking-hint">
             Puoi consultare le prenotazioni. La registrazione e la modifica
             sono riservate al maestro responsabile.
           </p>
         )}
 
-        <section style={panelStyle}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            <h2 style={headingStyle}>Elenco prenotazioni</h2>
+        <section className="booking-panel">
+          <div className="booking-list-heading">
+            <h2>Elenco prenotazioni</h2>
             <button
+              className="booking-refresh"
               onClick={caricaDati}
-              style={refreshButtonStyle}
             >
               ↻ Aggiorna
             </button>
@@ -582,103 +617,55 @@ function PrenotazioniContent() {
           {loading && <p>Caricamento prenotazioni...</p>}
 
           {!loading && prenotazioni.length === 0 && (
-            <p style={hintStyle}>
+            <p className="booking-hint">
               Non sono ancora presenti prenotazioni per questo resort.
             </p>
           )}
 
           {!loading &&
             prenotazioni.map((prenotazione) => (
-              <article
-                key={prenotazione.id}
-                style={{
-                  padding: 16,
-                  marginTop: 13,
-                  border: "1px solid #eadfce",
-                  borderRadius: 11,
-                  background: "#fffdf9",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 8,
-                  }}
-                >
-                  <strong style={{ color: "#742326", fontSize: 16 }}>
-                    {nomeCliente(prenotazione.customer_id)}
-                  </strong>
-
+              <article className="booking-card" key={prenotazione.id}>
+                <div className="booking-card-heading">
+                  <strong>{nomeCliente(prenotazione.customer_id)}</strong>
                   <span
-                    style={{
-                      padding: "5px 9px",
-                      borderRadius: 20,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      background:
-                        prenotazione.status === "confirmed"
-                          ? "#e8f3e8"
-                          : prenotazione.status === "cancelled"
-                          ? "#f8e7e5"
-                          : "#fff1d8",
-                      color:
-                        prenotazione.status === "confirmed"
-                          ? "#286238"
-                          : prenotazione.status === "cancelled"
-                          ? "#9a3430"
-                          : "#87601e",
-                    }}
+                    className={`booking-status ${prenotazione.status}`}
                   >
                     {statoItaliano(prenotazione.status)}
                   </span>
                 </div>
 
-                <p style={detailStyle}>
-                  🎾 {nomeCampo(prenotazione.court_id)}
+                <p>🎾 {nomeCampo(prenotazione.court_id)}</p>
+                <p>
+                  📅 {dataItaliana(prenotazione.starts_at)}
                 </p>
-                <p style={detailStyle}>
-                  📅 {formattaData(prenotazione.starts_at)}
-                  {" · "}
-                  {formattaOra(prenotazione.starts_at)}
-                  {" – "}
-                  {formattaOra(prenotazione.ends_at)}
+                <p>
+                  🕒 {oraItaliana(prenotazione.starts_at)} –{" "}
+                  {oraItaliana(prenotazione.ends_at)}
                 </p>
-                <p style={detailStyle}>
+                <p>
                   💶 {Number(prenotazione.price).toFixed(2)} €
                 </p>
 
                 {prenotazione.notes && (
-                  <p style={detailStyle}>
-                    Note: {prenotazione.notes}
-                  </p>
+                  <p>Note: {prenotazione.notes}</p>
                 )}
 
                 {isMaestro &&
                   prenotazione.status === "confirmed" && (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 8,
-                        marginTop: 12,
-                      }}
-                    >
+                    <div className="booking-actions">
                       <button
+                        className="booking-complete"
                         onClick={() =>
                           cambiaStato(prenotazione.id, "completed")
                         }
-                        style={completeButtonStyle}
                       >
                         Segna completata
                       </button>
                       <button
+                        className="booking-cancel"
                         onClick={() =>
                           cambiaStato(prenotazione.id, "cancelled")
                         }
-                        style={cancelButtonStyle}
                       >
                         Annulla
                       </button>
@@ -688,126 +675,350 @@ function PrenotazioniContent() {
             ))}
         </section>
 
-        <footer
-          style={{
-            textAlign: "center",
-            padding: "25px 10px",
-            color: "#a18e7d",
-            fontSize: 10,
-            letterSpacing: 1,
-          }}
-        >
+        <footer className="booking-footer">
           HAPPY TENNIS RESORT MANAGER · {resortNome}
         </footer>
       </div>
+
+      <style jsx>{`
+        .booking-page {
+          min-height: 100vh;
+          padding: 20px 14px;
+          background: #faf7f2;
+          color: #302b29;
+          overflow-x: hidden;
+        }
+
+        .booking-container {
+          width: 100%;
+          max-width: 760px;
+          margin: 0 auto;
+        }
+
+        .booking-header {
+          padding: 25px 20px;
+          border-radius: 15px;
+          color: white;
+          background: linear-gradient(120deg, #741d20, #451316);
+          margin-bottom: 20px;
+        }
+
+        .booking-ball {
+          font-size: 30px;
+        }
+
+        .booking-eyebrow {
+          color: #e8c88c;
+          font-size: 10px;
+          letter-spacing: 2px;
+          margin-top: 8px;
+        }
+
+        .booking-header h1 {
+          font: bold 30px Georgia, serif;
+          margin: 10px 0;
+        }
+
+        .booking-header p {
+          margin: 0;
+          color: #f1ded5;
+          font-size: 13px;
+        }
+
+        .booking-stats {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 9px;
+          margin-bottom: 20px;
+        }
+
+        .booking-stat {
+          min-width: 0;
+          display: grid;
+          gap: 5px;
+          padding: 13px 10px;
+          background: white;
+          border: 1px solid #eadfce;
+          border-radius: 11px;
+        }
+
+        .booking-stat strong {
+          color: #742326;
+          font-size: 25px;
+        }
+
+        .booking-stat span {
+          color: #85776b;
+          font-size: 11px;
+        }
+
+        .booking-panel {
+          width: 100%;
+          min-width: 0;
+          padding: 20px 16px;
+          margin-bottom: 20px;
+          background: white;
+          border: 1px solid #eadfce;
+          border-radius: 14px;
+          box-shadow: 0 4px 14px #4b241008;
+        }
+
+        .booking-panel h2 {
+          color: #742326;
+          font: bold 24px Georgia, serif;
+          margin: 0 0 16px;
+        }
+
+        .booking-label {
+          display: block;
+          margin: 16px 0 7px;
+          color: #604c42;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .booking-input {
+          display: block;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+          min-height: 49px;
+          padding: 12px;
+          border: 1px solid #dfd1c1;
+          border-radius: 9px;
+          background: white;
+          color: #302b29;
+          font-size: 16px;
+          appearance: auto;
+        }
+
+        .booking-input:focus {
+          outline: 2px solid #cba76f;
+          outline-offset: 1px;
+        }
+
+        .booking-mode-switch {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          width: 100%;
+        }
+
+        .booking-mode {
+          min-width: 0;
+          min-height: 46px;
+          padding: 9px 5px;
+          border: 1px solid #dfd1c1;
+          border-radius: 9px;
+          color: #742326;
+          background: white;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .booking-mode.active {
+          color: white;
+          border-color: #81292c;
+          background: #81292c;
+        }
+
+        .booking-new-customer {
+          padding: 12px;
+          margin-top: 10px;
+          border: 1px solid #eadfce;
+          border-radius: 10px;
+          background: #fffdf9;
+        }
+
+        .booking-new-customer .booking-label:first-child {
+          margin-top: 0;
+        }
+
+        .booking-notes {
+          min-height: 100px;
+          resize: vertical;
+          font-family: inherit;
+        }
+
+        .booking-hint {
+          color: #85776b;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        .booking-error,
+        .booking-success {
+          padding: 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .booking-error {
+          color: #922e2e;
+          background: #fbe9e7;
+        }
+
+        .booking-success {
+          color: #286238;
+          background: #e8f3e8;
+        }
+
+        .booking-submit {
+          width: 100%;
+          min-height: 54px;
+          padding: 14px;
+          margin-top: 20px;
+          border: 0;
+          border-radius: 9px;
+          color: white;
+          background: #81292c;
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .booking-submit:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .booking-list-heading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .booking-refresh {
+          padding: 9px 12px;
+          border: 1px solid #dfd1c1;
+          border-radius: 8px;
+          color: #742326;
+          background: white;
+          font-weight: 700;
+        }
+
+        .booking-card {
+          min-width: 0;
+          padding: 15px;
+          margin-top: 13px;
+          border: 1px solid #eadfce;
+          border-radius: 11px;
+          background: #fffdf9;
+          overflow-wrap: anywhere;
+        }
+
+        .booking-card-heading {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .booking-card-heading strong {
+          color: #742326;
+          font-size: 15px;
+        }
+
+        .booking-card p {
+          color: #766b61;
+          font-size: 13px;
+          margin: 9px 0 0;
+        }
+
+        .booking-status {
+          padding: 5px 9px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .booking-status.confirmed {
+          color: #286238;
+          background: #e8f3e8;
+        }
+
+        .booking-status.cancelled {
+          color: #9a3430;
+          background: #f8e7e5;
+        }
+
+        .booking-status.completed {
+          color: #87601e;
+          background: #fff1d8;
+        }
+
+        .booking-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 13px;
+        }
+
+        .booking-actions button {
+          min-height: 39px;
+          padding: 9px 12px;
+          border: 0;
+          border-radius: 7px;
+          color: white;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .booking-complete {
+          background: #397348;
+        }
+
+        .booking-cancel {
+          background: #9a3430;
+        }
+
+        .booking-footer {
+          padding: 20px 10px;
+          color: #a18e7d;
+          font-size: 9px;
+          letter-spacing: 1px;
+          text-align: center;
+        }
+
+        @media (max-width: 380px) {
+          .booking-page {
+            padding: 12px 9px;
+          }
+
+          .booking-panel {
+            padding: 16px 12px;
+          }
+
+          .booking-stats {
+            gap: 6px;
+          }
+
+          .booking-stat {
+            padding: 11px 7px;
+          }
+
+          .booking-stat strong {
+            font-size: 22px;
+          }
+
+          .booking-stat span {
+            font-size: 10px;
+          }
+
+          .booking-header h1 {
+            font-size: 26px;
+          }
+        }
+      `}</style>
     </main>
   );
 }
-
-const panelStyle: React.CSSProperties = {
-  background: "white",
-  border: "1px solid #eadfce",
-  borderRadius: 14,
-  padding: 20,
-  marginBottom: 22,
-  boxShadow: "0 4px 14px #4b241008",
-};
-
-const statStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 5,
-  padding: 17,
-  background: "white",
-  border: "1px solid #eadfce",
-  borderRadius: 12,
-};
-
-const statNumberStyle: React.CSSProperties = {
-  color: "#742326",
-  fontSize: 27,
-};
-
-const statLabelStyle: React.CSSProperties = {
-  color: "#85776b",
-  fontSize: 12,
-};
-
-const headingStyle: React.CSSProperties = {
-  color: "#742326",
-  font: "bold 22px Georgia, serif",
-  margin: "0 0 12px",
-};
-
-const hintStyle: React.CSSProperties = {
-  color: "#85776b",
-  fontSize: 13,
-  lineHeight: 1.6,
-};
-
-const detailStyle: React.CSSProperties = {
-  color: "#766b61",
-  fontSize: 13,
-  margin: "9px 0 0",
-};
-
-const errorStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 8,
-  color: "#922e2e",
-  background: "#fbe9e7",
-  fontSize: 13,
-};
-
-const successStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 8,
-  color: "#286238",
-  background: "#e8f3e8",
-  fontSize: 13,
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: 15,
-  marginTop: 20,
-  border: 0,
-  borderRadius: 9,
-  color: "white",
-  background: "#81292c",
-  fontSize: 15,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const refreshButtonStyle: React.CSSProperties = {
-  padding: "9px 13px",
-  border: "1px solid #dfd1c1",
-  borderRadius: 8,
-  color: "#742326",
-  background: "white",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const completeButtonStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  border: 0,
-  borderRadius: 7,
-  color: "white",
-  background: "#397348",
-  fontSize: 12,
-  cursor: "pointer",
-};
-
-const cancelButtonStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  border: 0,
-  borderRadius: 7,
-  color: "white",
-  background: "#9a3430",
-  fontSize: 12,
-  cursor: "pointer",
-};
 
 export default function PrenotazioniPage() {
   return (
