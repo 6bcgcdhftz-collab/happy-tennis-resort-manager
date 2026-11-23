@@ -17,6 +17,7 @@ const moduli = [
   { nome: "Contabilità", icona: "💶", attivo: false },
   { nome: "Gestione turisti", icona: "👥", attivo: false },
   { nome: "Documenti contrattuali", icona: "📄", attivo: false },
+  { nome: "Clienti", icona: "👤", percorso: "/clienti", attivo: true },
 ];
 
 type ResortOption = {
