@@ -403,6 +403,16 @@ function PrenotazioniContent() {
           </div>
           <h1>Prenotazioni campi</h1>
           <p>Gestione prenotazioni · {resortNome}</p>
+
+          <button
+            type="button"
+            className="booking-back-button"
+            onClick={() => {
+              window.location.href = `/dashboard?resort=${encodeURIComponent(resortId)}`;
+            }}
+          >
+            ← Torna alla dashboard
+          </button>
         </header>
 
         <section className="booking-stats">
@@ -723,6 +733,23 @@ function PrenotazioniContent() {
           margin: 0;
           color: #f1ded5;
           font-size: 13px;
+        }
+
+        .booking-back-button {
+          display: inline-block;
+          margin-top: 22px;
+          padding: 12px 18px;
+          border: 1px solid #e8c88c;
+          border-radius: 9px;
+          background: white;
+          color: #742326;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .booking-back-button:active {
+          opacity: 0.8;
         }
 
         .booking-stats {
