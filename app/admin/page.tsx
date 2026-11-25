@@ -13,6 +13,15 @@ type Resort = {
   staff_count: number;
 };
 
+type Membro = {
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+};
+
 const ruoli = [
   { value: "maestro_responsabile", label: "Maestro responsabile" },
   { value: "maestri_collaboratori", label: "Maestri collaboratori" },
@@ -36,6 +45,15 @@ const etichetteStato: Record<string, string> = {
   past_due: "Pagamento in ritardo",
   suspended: "Sospeso",
   cancelled: "Annullato",
+};
+
+const etichetteRuolo: Record<string, string> = {
+  maestro_responsabile: "Maestro responsabile",
+  maestri_collaboratori: "Maestro collaboratore",
+  reception_sportiva: "Reception sportiva",
+  direttore_sportivo: "Direttore sportivo",
+  amministrazione_resort: "Amministrazione resort",
+  manutenzione: "Manutenzione",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -94,6 +112,9 @@ export default function AdminPage() {
   const [associazione, setAssociazione] = useState(false);
   const [statiResort, setStatiResort] = useState<Record<string, string>>({});
   const [salvataggioStato, setSalvataggioStato] = useState("");
+  const [membri, setMembri] = useState<Membro[]>([]);
+  const [caricamentoMembri, setCaricamentoMembri] = useState(false);
+  const [rimozioneUtente, setRimozioneUtente] = useState("");
 
   const supabase = getSupabase();
 
@@ -132,6 +153,30 @@ export default function AdminPage() {
     if (elenco.length > 0 && !resortSelezionato) {
       setResortSelezionato(elenco[0].resort_id);
     }
+  }
+
+  async function caricaMembri(resortId: string) {
+    if (!resortId) {
+      setMembri([]);
+      return;
+    }
+
+    setCaricamentoMembri(true);
+    setErrore("");
+
+    const { data, error } = await supabase.rpc(
+      "platform_admin_list_members",
+      { p_resort_id: resortId }
+    );
+
+    if (error) {
+      setErrore("Impossibile caricare i membri: " + error.message);
+      setMembri([]);
+    } else {
+      setMembri((data || []) as Membro[]);
+    }
+
+    setCaricamentoMembri(false);
   }
 
   useEffect(() => {
@@ -206,6 +251,14 @@ export default function AdminPage() {
     verificaAccesso();
   }, []);
 
+  useEffect(() => {
+    if (autorizzato && resortSelezionato) {
+      caricaMembri(resortSelezionato);
+    } else {
+      setMembri([]);
+    }
+  }, [autorizzato, resortSelezionato]);
+
   async function creaResort(e: React.FormEvent) {
     e.preventDefault();
     setErrore("");
@@ -263,9 +316,42 @@ export default function AdminPage() {
       setEmailUtente("");
       setMessaggio("Account associato correttamente al resort.");
       await caricaResort();
+      await caricaMembri(resortSelezionato);
     }
 
     setAssociazione(false);
+  }
+
+  async function rimuoviDalResort(membro: Membro) {
+    const conferma = window.confirm(
+      `Vuoi rimuovere ${membro.full_name || membro.email} da questo resort?\n\nL'account Happy Tennis resterà attivo e i dati storici non verranno cancellati.`
+    );
+
+    if (!conferma) return;
+
+    setErrore("");
+    setMessaggio("");
+    setRimozioneUtente(membro.user_id);
+
+    const { error } = await supabase.rpc(
+      "platform_admin_remove_user",
+      {
+        p_resort_id: resortSelezionato,
+        p_user_id: membro.user_id,
+      }
+    );
+
+    if (error) {
+      setErrore("Rimozione non riuscita: " + error.message);
+    } else {
+      setMessaggio(
+        "Utente rimosso dal resort. Il suo account e la cronologia sono stati conservati."
+      );
+      await caricaMembri(resortSelezionato);
+      await caricaResort();
+    }
+
+    setRimozioneUtente("");
   }
 
   async function salvaStato(resortId: string) {
@@ -760,6 +846,145 @@ export default function AdminPage() {
               {associazione ? "Associazione..." : "Associa account"}
             </button>
           </form>
+        </section>
+
+        <section style={panelStyle}>
+          <span style={{
+            color: "#b58a42",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 2,
+          }}>
+            ELENCO E ACCESSI
+          </span>
+
+          <h2 style={{
+            color: "#762326",
+            fontFamily: "Georgia, serif",
+            marginTop: 8,
+          }}>
+            Membri del resort
+          </h2>
+
+          <label style={labelStyle}>
+            Seleziona il resort da gestire
+          </label>
+
+          <select
+            style={inputStyle}
+            value={resortSelezionato}
+            onChange={(e) => setResortSelezionato(e.target.value)}
+          >
+            {resort.map((r) => (
+              <option key={r.resort_id} value={r.resort_id}>
+                {r.resort_name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            style={{
+              ...buttonStyle,
+              background: "#806d5a",
+              marginTop: 12,
+              width: "100%",
+            }}
+            onClick={() => caricaMembri(resortSelezionato)}
+            disabled={!resortSelezionato || caricamentoMembri}
+          >
+            {caricamentoMembri ? "Caricamento..." : "↻ Aggiorna membri"}
+          </button>
+
+          {caricamentoMembri ? (
+            <p>Caricamento dei membri in corso...</p>
+          ) : membri.length === 0 ? (
+            <p style={{ color: "#70645b", marginTop: 18 }}>
+              Nessun membro trovato per questo resort.
+            </p>
+          ) : (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+              gap: 14,
+              marginTop: 18,
+            }}>
+              {membri.map((membro) => (
+                <article
+                  key={membro.user_id}
+                  style={{
+                    background: "#fff",
+                    border: "1px solid #eadfce",
+                    borderRadius: 12,
+                    padding: 16,
+                    minWidth: 0,
+                  }}
+                >
+                  <h3 style={{
+                    color: "#762326",
+                    margin: "0 0 8px",
+                    overflowWrap: "anywhere",
+                  }}>
+                    {membro.full_name || "Nome non disponibile"}
+                  </h3>
+
+                  <p style={{
+                    overflowWrap: "anywhere",
+                    fontSize: 14,
+                  }}>
+                    <strong>Email:</strong> {membro.email || "—"}
+                  </p>
+
+                  <p style={{ fontSize: 14 }}>
+                    <strong>Ruolo:</strong>{" "}
+                    {etichetteRuolo[membro.role] || membro.role}
+                  </p>
+
+                  <p style={{ fontSize: 14 }}>
+                    <strong>Associazione:</strong>{" "}
+                    <span style={{
+                      color: membro.is_active ? "#287a45" : "#a52b2b",
+                      fontWeight: 700,
+                    }}>
+                      {membro.is_active ? "Attiva" : "Non attiva"}
+                    </span>
+                  </p>
+
+                  <p style={{ fontSize: 13, color: "#806d5a" }}>
+                    <strong>Data associazione:</strong>{" "}
+                    {dataItaliana(membro.created_at)}
+                  </p>
+
+                  {membro.is_active && (
+                    <button
+                      style={{
+                        ...buttonStyle,
+                        width: "100%",
+                        background: "#a52b2b",
+                        marginTop: 8,
+                      }}
+                      onClick={() => rimuoviDalResort(membro)}
+                      disabled={rimozioneUtente === membro.user_id}
+                    >
+                      {rimozioneUtente === membro.user_id
+                        ? "Rimozione..."
+                        : "Rimuovi dal resort"}
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+
+          <p style={{
+            color: "#806d5a",
+            fontSize: 13,
+            lineHeight: 1.6,
+            marginTop: 18,
+          }}>
+            Attenzione: rimuovere un membro significa disattivare
+            solamente la sua associazione a questo resort. L'account
+            Happy Tennis e i dati storici non vengono eliminati.
+          </p>
         </section>
 
         <footer style={{
