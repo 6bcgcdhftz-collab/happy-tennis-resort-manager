@@ -59,6 +59,17 @@ function ClientiContent() {
   const [errore, setErrore] = useState("");
   const [erroreStorico, setErroreStorico] = useState("");
 
+  const [puoCreareCliente, setPuoCreareCliente] = useState(false);
+  const [mostraNuovoCliente, setMostraNuovoCliente] = useState(false);
+  const [nuovoNome, setNuovoNome] = useState("");
+  const [nuovoCognome, setNuovoCognome] = useState("");
+  const [nuovoTelefono, setNuovoTelefono] = useState("");
+  const [nuovaEmail, setNuovaEmail] = useState("");
+  const [nuoveNote, setNuoveNote] = useState("");
+  const [salvataggioCliente, setSalvataggioCliente] = useState(false);
+  const [erroreCliente, setErroreCliente] = useState("");
+  const [messaggioCliente, setMessaggioCliente] = useState("");
+
   useEffect(() => {
     let attivo = true;
 
@@ -112,6 +123,18 @@ function ClientiContent() {
           | { name: string }[]
           | null;
         const resort = Array.isArray(joined) ? joined[0] : joined;
+
+        const { data: permessoCreazione } = await supabase.rpc(
+          "can_manage_resort_customers",
+          {
+            p_resort_id: membership.resort_id,
+            p_permission: "create",
+          }
+        );
+
+        if (!attivo) return;
+
+        setPuoCreareCliente(permessoCreazione === true);
 
         const [clientiResult, campiResult, prenotazioniResult, storicoResult] =
           await Promise.all([
@@ -194,6 +217,72 @@ function ClientiContent() {
       attivo = false;
     };
   }, [resortRichiesto]);
+
+  async function salvaNuovoCliente(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!nuovoNome.trim() || !nuovoCognome.trim()) {
+      setErroreCliente("Inserisci nome e cognome del cliente.");
+      return;
+    }
+
+    if (!resortId) {
+      setErroreCliente("Resort non identificato. Ricarica la pagina.");
+      return;
+    }
+
+    setSalvataggioCliente(true);
+    setErroreCliente("");
+    setMessaggioCliente("");
+
+    try {
+      const supabase = getSupabase();
+
+      const { data, error } = await supabase
+        .from("resort_customers")
+        .insert({
+          resort_id: resortId,
+          first_name: nuovoNome.trim(),
+          last_name: nuovoCognome.trim(),
+          phone: nuovoTelefono.trim() || null,
+          email: nuovaEmail.trim() || null,
+          notes: nuoveNote.trim() || null,
+        })
+        .select("id, first_name, last_name, phone, email")
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setClienti((precedenti) =>
+        [...precedenti, data].sort((a, b) => {
+          const cognome = a.last_name.localeCompare(b.last_name);
+          return cognome !== 0
+            ? cognome
+            : a.first_name.localeCompare(b.first_name);
+        })
+      );
+
+      setClienteId(data.id);
+      setRicerca("");
+      setNuovoNome("");
+      setNuovoCognome("");
+      setNuovoTelefono("");
+      setNuovaEmail("");
+      setNuoveNote("");
+      setMostraNuovoCliente(false);
+      setMessaggioCliente("Cliente registrato correttamente.");
+    } catch (err) {
+      setErroreCliente(
+        err instanceof Error
+          ? err.message
+          : "Errore durante il salvataggio del cliente."
+      );
+    } finally {
+      setSalvataggioCliente(false);
+    }
+  }
 
   const clientiFiltrati = useMemo(() => {
     const termine = ricerca.trim().toLowerCase();
@@ -294,6 +383,10 @@ function ClientiContent() {
 
         {errore && <div className="clienti-error">{errore}</div>}
 
+        {messaggioCliente && (
+          <div className="clienti-success">{messaggioCliente}</div>
+        )}
+
         {loading && <div style={pannello}>Caricamento clienti...</div>}
 
         {!loading && !errore && (
@@ -309,13 +402,95 @@ function ClientiContent() {
               </div>
               <div style={pannello}>
                 <span style={etichetta}>Spostamenti registrati</span>
-                <strong>{spostamenti.length}</strong>
+                <strong>{spostimentiCount(spostamenti)}</strong>
               </div>
             </section>
 
             <div className="clienti-layout">
               <aside style={pannello}>
                 <h2>Elenco clienti</h2>
+
+                {puoCreareCliente && (
+                  <button
+                    className="clienti-nuovo"
+                    onClick={() => {
+                      setMostraNuovoCliente(!mostraNuovoCliente);
+                      setErroreCliente("");
+                      setMessaggioCliente("");
+                    }}
+                  >
+                    {mostraNuovoCliente ? "Chiudi" : "+ Nuovo cliente"}
+                  </button>
+                )}
+
+                {mostraNuovoCliente && (
+                  <form
+                    className="cliente-form"
+                    onSubmit={salvaNuovoCliente}
+                  >
+                    <h3>Registra nuovo cliente</h3>
+
+                    <label>Nome *</label>
+                    <input
+                      className="clienti-input"
+                      value={nuovoNome}
+                      onChange={(event) => setNuovoNome(event.target.value)}
+                      placeholder="Nome"
+                      required
+                    />
+
+                    <label>Cognome *</label>
+                    <input
+                      className="clienti-input"
+                      value={nuovoCognome}
+                      onChange={(event) => setNuovoCognome(event.target.value)}
+                      placeholder="Cognome"
+                      required
+                    />
+
+                    <label>Telefono</label>
+                    <input
+                      className="clienti-input"
+                      type="tel"
+                      value={nuovoTelefono}
+                      onChange={(event) => setNuovoTelefono(event.target.value)}
+                      placeholder="Numero di telefono"
+                    />
+
+                    <label>Email</label>
+                    <input
+                      className="clienti-input"
+                      type="email"
+                      value={nuovaEmail}
+                      onChange={(event) => setNuovaEmail(event.target.value)}
+                      placeholder="Indirizzo email"
+                    />
+
+                    <label>Note</label>
+                    <textarea
+                      className="clienti-input"
+                      value={nuoveNote}
+                      onChange={(event) => setNuoveNote(event.target.value)}
+                      placeholder="Note sul cliente"
+                      rows={3}
+                    />
+
+                    {erroreCliente && (
+                      <div className="clienti-error">{erroreCliente}</div>
+                    )}
+
+                    <button
+                      className="clienti-salva"
+                      type="submit"
+                      disabled={salvataggioCliente}
+                    >
+                      {salvataggioCliente
+                        ? "Salvataggio..."
+                        : "Salva cliente"}
+                    </button>
+                  </form>
+                )}
+
                 <input
                   className="clienti-input"
                   value={ricerca}
@@ -438,13 +613,13 @@ function ClientiContent() {
                         <p className="clienti-error">{erroreStorico}</p>
                       )}
 
-                      {!erroreStorico && spostimentiCount(spostamentiCliente) === 0 && (
+                      {!erroreStorico && spostimentiCount(spostimentiCliente) === 0 && (
                         <p>Nessuno spostamento registrato per questo cliente.</p>
                       )}
 
-                      {!erroreStorico && spostimentiCount(spostamentiCliente) > 0 && (
+                      {!erroreStorico && spostimentiCount(spostimentiCliente) > 0 && (
                         <div className="clienti-records">
-                          {spostamentiCliente.map((item) => (
+                          {spostimentiCliente.map((item) => (
                             <article className="cliente-record spostamento" key={item.id}>
                               <strong>Prenotazione spostata</strong>
                               <p>
@@ -538,6 +713,50 @@ function ClientiContent() {
           border: 1px solid #ddd;
           border-radius: 8px;
           font-size: 14px;
+          font-family: inherit;
+        }
+        .cliente-form {
+          display: grid;
+          gap: 9px;
+          margin: 14px 0;
+          padding: 14px;
+          border: 1px solid #eadada;
+          border-radius: 10px;
+          background: #fffafa;
+        }
+        .cliente-form h3 {
+          margin: 0 0 5px;
+          font-size: 16px;
+        }
+        .cliente-form label {
+          font-size: 12px;
+          font-weight: 700;
+          color: #555;
+        }
+        .clienti-nuovo, .clienti-salva {
+          width: 100%;
+          border: 0;
+          border-radius: 8px;
+          padding: 12px;
+          background: #762326;
+          color: white;
+          font-weight: 700;
+          cursor: pointer;
+          margin-bottom: 12px;
+        }
+        .clienti-salva {
+          margin: 5px 0 0;
+        }
+        .clienti-salva:disabled {
+          opacity: 0.6;
+          cursor: wait;
+        }
+        .clienti-success {
+          background: #edf8f0;
+          color: #176b3a;
+          border-radius: 9px;
+          padding: 13px;
+          margin: 14px 0;
         }
         .clienti-lista, .clienti-records, .clienti-dettaglio {
           display: grid;
@@ -621,6 +840,7 @@ function ClientiContent() {
           border-radius: 9px;
           padding: 13px;
           margin-bottom: 15px;
+          font-size: 13px;
         }
         .clienti-footer {
           text-align: center;
