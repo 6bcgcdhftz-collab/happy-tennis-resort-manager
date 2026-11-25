@@ -402,7 +402,7 @@ function ClientiContent() {
               </div>
               <div style={pannello}>
                 <span style={etichetta}>Spostamenti registrati</span>
-                <strong>{spostimentiCount(spostamenti)}</strong>
+                <strong>{spostamentiCount(spostamenti)}</strong>
               </div>
             </section>
 
@@ -570,7 +570,7 @@ function ClientiContent() {
                       </div>
                       <div style={pannello}>
                         <span style={etichetta}>Spostamenti</span>
-                        <strong>{spostimentiCount(spostamentiCliente)}</strong>
+                        <strong>{spostamentiCount(spostamentiCliente)}</strong>
                       </div>
                       <div style={pannello}>
                         <span style={etichetta}>Totale completato</span>
@@ -613,30 +613,39 @@ function ClientiContent() {
                         <p className="clienti-error">{erroreStorico}</p>
                       )}
 
-                      {!erroreStorico && spostimentiCount(spostimentiCliente) === 0 && (
-                        <p>Nessuno spostamento registrato per questo cliente.</p>
-                      )}
+                      {!erroreStorico &&
+                        spostamentiCount(spostamentiCliente) === 0 && (
+                          <p>
+                            Nessuno spostamento registrato per questo cliente.
+                          </p>
+                        )}
 
-                      {!erroreStorico && spostimentiCount(spostimentiCliente) > 0 && (
-                        <div className="clienti-records">
-                          {spostimentiCliente.map((item) => (
-                            <article className="cliente-record spostamento" key={item.id}>
-                              <strong>Prenotazione spostata</strong>
-                              <p>
-                                <b>Da:</b> {nomeCampo(item.old_court_id)} ·{" "}
-                                {dataOra(item.old_starts_at)} – {ora(item.old_ends_at)}
-                              </p>
-                              <p>
-                                <b>A:</b> {nomeCampo(item.new_court_id)} ·{" "}
-                                {dataOra(item.new_starts_at)} – {ora(item.new_ends_at)}
-                              </p>
-                              <small>
-                                Registrato il {dataOra(item.moved_at)}
-                              </small>
-                            </article>
-                          ))}
-                        </div>
-                      )}
+                      {!erroreStorico &&
+                        spostamentiCount(spostamentiCliente) > 0 && (
+                          <div className="clienti-records">
+                            {spostamentiCliente.map((item) => (
+                              <article
+                                className="cliente-record spostamento"
+                                key={item.id}
+                              >
+                                <strong>Prenotazione spostata</strong>
+                                <p>
+                                  <b>Da:</b> {nomeCampo(item.old_court_id)} ·{" "}
+                                  {dataOra(item.old_starts_at)} –{" "}
+                                  {ora(item.old_ends_at)}
+                                </p>
+                                <p>
+                                  <b>A:</b> {nomeCampo(item.new_court_id)} ·{" "}
+                                  {dataOra(item.new_starts_at)} –{" "}
+                                  {ora(item.new_ends_at)}
+                                </p>
+                                <small>
+                                  Registrato il {dataOra(item.moved_at)}
+                                </small>
+                              </article>
+                            ))}
+                          </div>
+                        )}
                     </section>
                   </>
                 )}
@@ -733,7 +742,8 @@ function ClientiContent() {
           font-weight: 700;
           color: #555;
         }
-        .clienti-nuovo, .clienti-salva {
+        .clienti-nuovo,
+        .clienti-salva {
           width: 100%;
           border: 0;
           border-radius: 8px;
@@ -758,7 +768,9 @@ function ClientiContent() {
           padding: 13px;
           margin: 14px 0;
         }
-        .clienti-lista, .clienti-records, .clienti-dettaglio {
+        .clienti-lista,
+        .clienti-records,
+        .clienti-dettaglio {
           display: grid;
           gap: 10px;
         }
@@ -778,7 +790,8 @@ function ClientiContent() {
           border-color: #762326;
           background: #fff5f5;
         }
-        .cliente-item strong, .cliente-item span {
+        .cliente-item strong,
+        .cliente-item span {
           display: block;
         }
         .cliente-item span {
@@ -828,9 +841,15 @@ function ClientiContent() {
           font-size: 12px;
           font-weight: 700;
         }
-        .stato-confirmed { color: #176b3a; }
-        .stato-cancelled { color: #a32020; }
-        .stato-completed { color: #666; }
+        .stato-confirmed {
+          color: #176b3a;
+        }
+        .stato-cancelled {
+          color: #a32020;
+        }
+        .stato-completed {
+          color: #666;
+        }
         .spostamento {
           border-left: 4px solid #762326;
         }
@@ -865,7 +884,7 @@ function ClientiContent() {
   );
 }
 
-function spostimentiCount(items: Spostamento[]) {
+function spostamentiCount(items: Spostamento[]) {
   return items.length;
 }
 
