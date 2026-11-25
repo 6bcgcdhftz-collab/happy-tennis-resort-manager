@@ -60,12 +60,21 @@ function ClientiContent() {
   const [erroreStorico, setErroreStorico] = useState("");
 
   const [puoCreareCliente, setPuoCreareCliente] = useState(false);
+  const [puoModificareCliente, setPuoModificareCliente] = useState(false);
+
   const [mostraNuovoCliente, setMostraNuovoCliente] = useState(false);
   const [nuovoNome, setNuovoNome] = useState("");
   const [nuovoCognome, setNuovoCognome] = useState("");
   const [nuovoTelefono, setNuovoTelefono] = useState("");
   const [nuovaEmail, setNuovaEmail] = useState("");
   const [nuoveNote, setNuoveNote] = useState("");
+
+  const [mostraModificaCliente, setMostraModificaCliente] = useState(false);
+  const [modificaNome, setModificaNome] = useState("");
+  const [modificaCognome, setModificaCognome] = useState("");
+  const [modificaTelefono, setModificaTelefono] = useState("");
+  const [modificaEmail, setModificaEmail] = useState("");
+
   const [salvataggioCliente, setSalvataggioCliente] = useState(false);
   const [erroreCliente, setErroreCliente] = useState("");
   const [messaggioCliente, setMessaggioCliente] = useState("");
@@ -124,17 +133,21 @@ function ClientiContent() {
           | null;
         const resort = Array.isArray(joined) ? joined[0] : joined;
 
-        const { data: permessoCreazione } = await supabase.rpc(
-          "can_manage_resort_customers",
-          {
+        const [permessoCreazione, permessoModifica] = await Promise.all([
+          supabase.rpc("can_manage_resort_customers", {
             p_resort_id: membership.resort_id,
             p_permission: "create",
-          }
-        );
+          }),
+          supabase.rpc("can_manage_resort_customers", {
+            p_resort_id: membership.resort_id,
+            p_permission: "edit",
+          }),
+        ]);
 
         if (!attivo) return;
 
-        setPuoCreareCliente(permessoCreazione === true);
+        setPuoCreareCliente(permessoCreazione.data === true);
+        setPuoModificareCliente(permessoModifica.data === true);
 
         const [clientiResult, campiResult, prenotazioniResult, storicoResult] =
           await Promise.all([
@@ -251,9 +264,7 @@ function ClientiContent() {
         .select("id, first_name, last_name, phone, email")
         .single();
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
 
       setClienti((precedenti) =>
         [...precedenti, data].sort((a, b) => {
@@ -278,6 +289,77 @@ function ClientiContent() {
         err instanceof Error
           ? err.message
           : "Errore durante il salvataggio del cliente."
+      );
+    } finally {
+      setSalvataggioCliente(false);
+    }
+  }
+
+  function apriModificaCliente() {
+    if (!cliente) return;
+
+    setModificaNome(cliente.first_name);
+    setModificaCognome(cliente.last_name);
+    setModificaTelefono(cliente.phone ?? "");
+    setModificaEmail(cliente.email ?? "");
+    setErroreCliente("");
+    setMessaggioCliente("");
+    setMostraNuovoCliente(false);
+    setMostraModificaCliente(true);
+  }
+
+  async function salvaModificheCliente(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!cliente) return;
+
+    if (!modificaNome.trim() || !modificaCognome.trim()) {
+      setErroreCliente("Nome e cognome sono obbligatori.");
+      return;
+    }
+
+    setSalvataggioCliente(true);
+    setErroreCliente("");
+    setMessaggioCliente("");
+
+    try {
+      const supabase = getSupabase();
+
+      const { data, error } = await supabase
+        .from("resort_customers")
+        .update({
+          first_name: modificaNome.trim(),
+          last_name: modificaCognome.trim(),
+          phone: modificaTelefono.trim() || null,
+          email: modificaEmail.trim() || null,
+        })
+        .eq("id", cliente.id)
+        .eq("resort_id", resortId)
+        .select("id, first_name, last_name, phone, email")
+        .single();
+
+      if (error) throw new Error(error.message);
+
+      setClienti((precedenti) =>
+        precedenti
+          .map((item) => (item.id === data.id ? data : item))
+          .sort((a, b) => {
+            const cognome = a.last_name.localeCompare(b.last_name);
+            return cognome !== 0
+              ? cognome
+              : a.first_name.localeCompare(b.first_name);
+          })
+      );
+
+      setMostraModificaCliente(false);
+      setMessaggioCliente("Dati del cliente aggiornati correttamente.");
+    } catch (err) {
+      setErroreCliente(
+        err instanceof Error
+          ? err.message
+          : "Errore durante la modifica del cliente."
       );
     } finally {
       setSalvataggioCliente(false);
@@ -415,6 +497,7 @@ function ClientiContent() {
                     className="clienti-nuovo"
                     onClick={() => {
                       setMostraNuovoCliente(!mostraNuovoCliente);
+                      setMostraModificaCliente(false);
                       setErroreCliente("");
                       setMessaggioCliente("");
                     }}
@@ -507,7 +590,12 @@ function ClientiContent() {
                           ? "cliente-item selezionato"
                           : "cliente-item"
                       }
-                      onClick={() => setClienteId(item.id)}
+                      onClick={() => {
+                        setClienteId(item.id);
+                        setMostraModificaCliente(false);
+                        setErroreCliente("");
+                        setMessaggioCliente("");
+                      }}
                     >
                       <strong>
                         {item.first_name} {item.last_name}
@@ -539,28 +627,116 @@ function ClientiContent() {
                         {cliente.first_name} {cliente.last_name}
                       </h2>
 
-                      <div className="cliente-contatti">
-                        <div>
-                          <span style={etichetta}>Telefono</span>
-                          <p>
-                            {cliente.phone ? (
-                              <a href={`tel:${cliente.phone}`}>
-                                {cliente.phone}
-                              </a>
-                            ) : "Non indicato"}
-                          </p>
+                      {puoModificareCliente && !mostraModificaCliente && (
+                        <button
+                          className="clienti-modifica"
+                          onClick={apriModificaCliente}
+                        >
+                          Modifica cliente
+                        </button>
+                      )}
+
+                      {mostraModificaCliente && (
+                        <form
+                          className="cliente-form"
+                          onSubmit={salvaModificheCliente}
+                        >
+                          <h3>Modifica dati cliente</h3>
+
+                          <label>Nome *</label>
+                          <input
+                            className="clienti-input"
+                            value={modificaNome}
+                            onChange={(event) =>
+                              setModificaNome(event.target.value)
+                            }
+                            required
+                          />
+
+                          <label>Cognome *</label>
+                          <input
+                            className="clienti-input"
+                            value={modificaCognome}
+                            onChange={(event) =>
+                              setModificaCognome(event.target.value)
+                            }
+                            required
+                          />
+
+                          <label>Telefono</label>
+                          <input
+                            className="clienti-input"
+                            type="tel"
+                            value={modificaTelefono}
+                            onChange={(event) =>
+                              setModificaTelefono(event.target.value)
+                            }
+                          />
+
+                          <label>Email</label>
+                          <input
+                            className="clienti-input"
+                            type="email"
+                            value={modificaEmail}
+                            onChange={(event) =>
+                              setModificaEmail(event.target.value)
+                            }
+                          />
+
+                          {erroreCliente && (
+                            <div className="clienti-error">
+                              {erroreCliente}
+                            </div>
+                          )}
+
+                          <button
+                            className="clienti-salva"
+                            type="submit"
+                            disabled={salvataggioCliente}
+                          >
+                            {salvataggioCliente
+                              ? "Salvataggio..."
+                              : "Salva modifiche"}
+                          </button>
+
+                          <button
+                            className="clienti-annulla"
+                            type="button"
+                            disabled={salvataggioCliente}
+                            onClick={() => {
+                              setMostraModificaCliente(false);
+                              setErroreCliente("");
+                            }}
+                          >
+                            Annulla
+                          </button>
+                        </form>
+                      )}
+
+                      {!mostraModificaCliente && (
+                        <div className="cliente-contatti">
+                          <div>
+                            <span style={etichetta}>Telefono</span>
+                            <p>
+                              {cliente.phone ? (
+                                <a href={`tel:${cliente.phone}`}>
+                                  {cliente.phone}
+                                </a>
+                              ) : "Non indicato"}
+                            </p>
+                          </div>
+                          <div>
+                            <span style={etichetta}>Email</span>
+                            <p>
+                              {cliente.email ? (
+                                <a href={`mailto:${cliente.email}`}>
+                                  {cliente.email}
+                                </a>
+                              ) : "Non indicata"}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <span style={etichetta}>Email</span>
-                          <p>
-                            {cliente.email ? (
-                              <a href={`mailto:${cliente.email}`}>
-                                {cliente.email}
-                              </a>
-                            ) : "Non indicata"}
-                          </p>
-                        </div>
-                      </div>
+                      )}
                     </section>
 
                     <section className="clienti-stats">
@@ -743,7 +919,9 @@ function ClientiContent() {
           color: #555;
         }
         .clienti-nuovo,
-        .clienti-salva {
+        .clienti-salva,
+        .clienti-modifica,
+        .clienti-annulla {
           width: 100%;
           border: 0;
           border-radius: 8px;
@@ -757,7 +935,16 @@ function ClientiContent() {
         .clienti-salva {
           margin: 5px 0 0;
         }
-        .clienti-salva:disabled {
+        .clienti-modifica {
+          max-width: 220px;
+          margin: 0 0 16px;
+        }
+        .clienti-annulla {
+          background: #777;
+          margin: 0;
+        }
+        .clienti-salva:disabled,
+        .clienti-annulla:disabled {
           opacity: 0.6;
           cursor: wait;
         }
