@@ -11,6 +11,7 @@ type Cliente = {
   last_name: string;
   phone: string | null;
   email: string | null;
+  notes: string | null;
 };
 
 type Campo = {
@@ -61,6 +62,7 @@ function ClientiContent() {
 
   const [puoCreareCliente, setPuoCreareCliente] = useState(false);
   const [puoModificareCliente, setPuoModificareCliente] = useState(false);
+  const [puoModificareNote, setPuoModificareNote] = useState(false);
 
   const [mostraNuovoCliente, setMostraNuovoCliente] = useState(false);
   const [nuovoNome, setNuovoNome] = useState("");
@@ -75,7 +77,11 @@ function ClientiContent() {
   const [modificaTelefono, setModificaTelefono] = useState("");
   const [modificaEmail, setModificaEmail] = useState("");
 
+  const [mostraModificaNote, setMostraModificaNote] = useState(false);
+  const [modificaNote, setModificaNote] = useState("");
+
   const [salvataggioCliente, setSalvataggioCliente] = useState(false);
+  const [salvataggioNote, setSalvataggioNote] = useState(false);
   const [erroreCliente, setErroreCliente] = useState("");
   const [messaggioCliente, setMessaggioCliente] = useState("");
 
@@ -133,7 +139,11 @@ function ClientiContent() {
           | null;
         const resort = Array.isArray(joined) ? joined[0] : joined;
 
-        const [permessoCreazione, permessoModifica] = await Promise.all([
+        const [
+          permessoCreazione,
+          permessoModifica,
+          permessoNote,
+        ] = await Promise.all([
           supabase.rpc("can_manage_resort_customers", {
             p_resort_id: membership.resort_id,
             p_permission: "create",
@@ -142,18 +152,23 @@ function ClientiContent() {
             p_resort_id: membership.resort_id,
             p_permission: "edit",
           }),
+          supabase.rpc("can_manage_resort_customers", {
+            p_resort_id: membership.resort_id,
+            p_permission: "edit_notes",
+          }),
         ]);
 
         if (!attivo) return;
 
         setPuoCreareCliente(permessoCreazione.data === true);
         setPuoModificareCliente(permessoModifica.data === true);
+        setPuoModificareNote(permessoNote.data === true);
 
         const [clientiResult, campiResult, prenotazioniResult, storicoResult] =
           await Promise.all([
             supabase
               .from("resort_customers")
-              .select("id, first_name, last_name, phone, email")
+              .select("id, first_name, last_name, phone, email, notes")
               .eq("resort_id", membership.resort_id)
               .order("last_name")
               .order("first_name"),
@@ -261,7 +276,7 @@ function ClientiContent() {
           email: nuovaEmail.trim() || null,
           notes: nuoveNote.trim() || null,
         })
-        .select("id, first_name, last_name, phone, email")
+        .select("id, first_name, last_name, phone, email, notes")
         .single();
 
       if (error) throw new Error(error.message);
@@ -305,6 +320,7 @@ function ClientiContent() {
     setErroreCliente("");
     setMessaggioCliente("");
     setMostraNuovoCliente(false);
+    setMostraModificaNote(false);
     setMostraModificaCliente(true);
   }
 
@@ -337,7 +353,7 @@ function ClientiContent() {
         })
         .eq("id", cliente.id)
         .eq("resort_id", resortId)
-        .select("id, first_name, last_name, phone, email")
+        .select("id, first_name, last_name, phone, email, notes")
         .single();
 
       if (error) throw new Error(error.message);
@@ -363,6 +379,63 @@ function ClientiContent() {
       );
     } finally {
       setSalvataggioCliente(false);
+    }
+  }
+
+  function apriModificaNote() {
+    if (!cliente) return;
+
+    setModificaNote(cliente.notes ?? "");
+    setErroreCliente("");
+    setMessaggioCliente("");
+    setMostraNuovoCliente(false);
+    setMostraModificaCliente(false);
+    setMostraModificaNote(true);
+  }
+
+  async function salvaModificheNote(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!cliente || !resortId) return;
+
+    setSalvataggioNote(true);
+    setErroreCliente("");
+    setMessaggioCliente("");
+
+    try {
+      const supabase = getSupabase();
+
+      const { error } = await supabase.rpc(
+        "update_resort_customer_notes",
+        {
+          p_resort_id: resortId,
+          p_customer_id: cliente.id,
+          p_notes: modificaNote.trim() || null,
+        }
+      );
+
+      if (error) throw new Error(error.message);
+
+      setClienti((precedenti) =>
+        precedenti.map((item) =>
+          item.id === cliente.id
+            ? { ...item, notes: modificaNote.trim() || null }
+            : item
+        )
+      );
+
+      setMostraModificaNote(false);
+      setMessaggioCliente("Note del cliente aggiornate correttamente.");
+    } catch (err) {
+      setErroreCliente(
+        err instanceof Error
+          ? err.message
+          : "Errore durante il salvataggio delle note."
+      );
+    } finally {
+      setSalvataggioNote(false);
     }
   }
 
@@ -498,6 +571,7 @@ function ClientiContent() {
                     onClick={() => {
                       setMostraNuovoCliente(!mostraNuovoCliente);
                       setMostraModificaCliente(false);
+                      setMostraModificaNote(false);
                       setErroreCliente("");
                       setMessaggioCliente("");
                     }}
@@ -593,6 +667,7 @@ function ClientiContent() {
                       onClick={() => {
                         setClienteId(item.id);
                         setMostraModificaCliente(false);
+                        setMostraModificaNote(false);
                         setErroreCliente("");
                         setMessaggioCliente("");
                       }}
@@ -736,6 +811,78 @@ function ClientiContent() {
                             </p>
                           </div>
                         </div>
+                      )}
+                    </section>
+
+                    <section style={pannello}>
+                      <div className="note-intestazione">
+                        <div>
+                          <div style={etichetta}>Note del cliente</div>
+                          <h2>Informazioni aggiuntive</h2>
+                        </div>
+
+                        {puoModificareNote && !mostraModificaNote && (
+                          <button
+                            className="clienti-modifica"
+                            onClick={apriModificaNote}
+                          >
+                            Modifica note
+                          </button>
+                        )}
+                      </div>
+
+                      {!mostraModificaNote && (
+                        <p className="note-testo">
+                          {cliente.notes || "Nessuna nota inserita."}
+                        </p>
+                      )}
+
+                      {mostraModificaNote && (
+                        <form
+                          className="cliente-form"
+                          onSubmit={salvaModificheNote}
+                        >
+                          <h3>Modifica note</h3>
+
+                          <label>Note</label>
+                          <textarea
+                            className="clienti-input"
+                            value={modificaNote}
+                            onChange={(event) =>
+                              setModificaNote(event.target.value)
+                            }
+                            placeholder="Scrivi qui le note sul cliente..."
+                            rows={5}
+                          />
+
+                          {erroreCliente && (
+                            <div className="clienti-error">
+                              {erroreCliente}
+                            </div>
+                          )}
+
+                          <button
+                            className="clienti-salva"
+                            type="submit"
+                            disabled={salvataggioNote}
+                          >
+                            {salvataggioNote
+                              ? "Salvataggio..."
+                              : "Salva note"}
+                          </button>
+
+                          <button
+                            className="clienti-annulla"
+                            type="button"
+                            disabled={salvataggioNote}
+                            onClick={() => {
+                              setMostraModificaNote(false);
+                              setErroreCliente("");
+                            }}
+                          >
+                            Annulla
+                          </button>
+                        </form>
                       )}
                     </section>
 
@@ -955,6 +1102,22 @@ function ClientiContent() {
           padding: 13px;
           margin: 14px 0;
         }
+        .note-intestazione {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .note-intestazione h2 {
+          margin-top: 8px;
+        }
+        .note-testo {
+          white-space: pre-wrap;
+          line-height: 1.6;
+          color: #555;
+          margin-bottom: 0;
+        }
         .clienti-lista,
         .clienti-records,
         .clienti-dettaglio {
@@ -1069,6 +1232,10 @@ function ClientiContent() {
       `}</style>
     </main>
   );
+}
+
+function spostimentiCount(items: Spostamento[]) {
+  return items.length;
 }
 
 function spostamentiCount(items: Spostamento[]) {
