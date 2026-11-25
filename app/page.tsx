@@ -10,6 +10,7 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [resortName, setResortName] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [message, setMessage] = useState("");
@@ -18,12 +19,26 @@ export default function Home() {
   function cambiaModalita(nuovaModalita: Mode) {
     setMode(nuovaModalita);
     setMessage("");
+    setConfirmPassword("");
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
+
+    if (mode !== "login") {
+      if (password !== confirmPassword) {
+        setMessage("Le due password non coincidono. Controllale e riprova.");
+        return;
+      }
+
+      if (password.length < 8) {
+        setMessage("La password deve contenere almeno 8 caratteri.");
+        return;
+      }
+    }
+
+    setBusy(true);
 
     try {
       const supabase = getSupabase();
@@ -42,9 +57,13 @@ export default function Home() {
         });
 
         if (error) throw error;
+
         if (!data.user) {
           throw new Error("Registrazione non completata.");
         }
+
+        setPassword("");
+        setConfirmPassword("");
 
         if (mode === "staff") {
           setMode("login");
@@ -265,6 +284,20 @@ export default function Home() {
                 placeholder="Almeno 8 caratteri"
               />
             </label>
+
+            {mode !== "login" && (
+              <label>
+                Conferma password
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Ripeti la password"
+                />
+              </label>
+            )}
 
             <button className="primary" disabled={busy}>
               {busy
